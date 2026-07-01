@@ -4,7 +4,7 @@
  * Run: node scripts/generate-compound-seed.mjs
  */
 
-import { writeFileSync } from "fs";
+import { writeFileSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
@@ -215,7 +215,29 @@ for (const [category, names] of Object.entries(COMPOUNDS)) {
   }
 }
 
-const outPath = join(__dirname, "../supabase/migrations/20250702000001_seed_compounds.sql");
-writeFileSync(outPath, sql);
+const migrationPath = join(__dirname, "../supabase/migrations/20250702000001_seed_compounds.sql");
+writeFileSync(migrationPath, sql);
+
+let pedsafeSql = `-- PEDSAFE — Full compound library seed for public.compounds (generated)
+-- Source: scripts/generate-compound-seed.mjs
+-- Safe to re-run: does not truncate or delete rows. Existing compounds are preserved via ON CONFLICT (name) DO NOTHING.
+-- Run in Supabase SQL Editor, or: psql $DATABASE_URL -f supabase/seed/compounds.sql
+
+`;
+
+for (const [category, names] of Object.entries(COMPOUNDS)) {
+  for (const name of names) {
+    const meta = inferMeta(category, name);
+    pedsafeSql += `INSERT INTO public.compounds (name, compound_type, administration, ester, description)\n`;
+    pedsafeSql += `VALUES (${sqlStr(name)}, ${sqlStr(meta.compound_type)}, ${sqlStr(meta.administration)}, ${sqlStr(meta.ester)}, ${sqlStr(meta.description)})\n`;
+    pedsafeSql += `ON CONFLICT (name) DO NOTHING;\n\n`;
+  }
+}
+
+const seedPath = join(__dirname, "../supabase/seed/compounds.sql");
+mkdirSync(dirname(seedPath), { recursive: true });
+writeFileSync(seedPath, pedsafeSql);
+
 const total = Object.values(COMPOUNDS).flat().length;
-console.log(`Wrote ${outPath} (${CATEGORIES.length} categories, ${total} compounds)`);
+console.log(`Wrote ${migrationPath} (${CATEGORIES.length} categories, ${total} compounds)`);
+console.log(`Wrote ${seedPath} (${total} compounds)`);
