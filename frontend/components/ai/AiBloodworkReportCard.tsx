@@ -6,6 +6,7 @@ import { Button, Badge } from "@/components/ui";
 import { AiDisclaimer } from "./AiDisclaimer";
 import { AiExpandableSection } from "./AiExpandableSection";
 import { AiSourceList } from "./AiSourceList";
+import { AiUnavailableNotice, assertAiAvailable } from "./AiUnavailableNotice";
 import { useAuth } from "@/hooks/useAuth";
 import { generateBloodworkReport } from "@/services/ai";
 import type { AiBloodworkReportRequest, AiBloodworkReportResult } from "@/types/ai";
@@ -24,6 +25,7 @@ export function AiBloodworkReportCard({ request }: AiBloodworkReportCardProps) {
     setIsLoading(true);
     setError(null);
     try {
+      assertAiAvailable();
       const result = await generateBloodworkReport(request, session?.access_token);
       setReport(result);
     } catch (e) {
@@ -46,6 +48,8 @@ export function AiBloodworkReportCard({ request }: AiBloodworkReportCardProps) {
           {report ? "Regenerate" : "Generate Report"}
         </Button>
       </div>
+
+      <AiUnavailableNotice />
 
       {error && (
         <p className="text-sm text-accent" role="alert">{error}</p>

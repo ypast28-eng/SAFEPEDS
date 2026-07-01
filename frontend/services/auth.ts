@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/client";
+import { isSupabaseEnvConfigured } from "@/lib/supabase/env";
+import { tryCreateClient } from "@/lib/supabase/client";
 import { config } from "@/lib/config";
 
 function getRedirectUrl(path: string): string {
@@ -6,16 +7,26 @@ function getRedirectUrl(path: string): string {
   return `${base}${path}`;
 }
 
+function requireClient() {
+  const client = tryCreateClient();
+  if (!client) {
+    throw new Error(
+      "Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to enable authentication."
+    );
+  }
+  return client;
+}
+
 /** Client-side Supabase auth operations */
 export const authService = {
+  isConfigured: () => isSupabaseEnvConfigured(),
+
   async signInWithPassword(email: string, password: string) {
-    const supabase = createClient();
-    return supabase.auth.signInWithPassword({ email, password });
+    return requireClient().auth.signInWithPassword({ email, password });
   },
 
   async signUp(email: string, password: string) {
-    const supabase = createClient();
-    return supabase.auth.signUp({
+    return requireClient().auth.signUp({
       email,
       password,
       options: {
@@ -25,20 +36,19 @@ export const authService = {
   },
 
   async signOut() {
-    const supabase = createClient();
-    return supabase.auth.signOut();
+    const client = tryCreateClient();
+    if (!client) return { error: null };
+    return client.auth.signOut();
   },
 
   async resetPassword(email: string) {
-    const supabase = createClient();
-    return supabase.auth.resetPasswordForEmail(email, {
+    return requireClient().auth.resetPasswordForEmail(email, {
       redirectTo: getRedirectUrl("/reset-password"),
     });
   },
 
   async resendVerificationEmail(email: string) {
-    const supabase = createClient();
-    return supabase.auth.resend({
+    return requireClient().auth.resend({
       type: "signup",
       email,
       options: {
@@ -48,12 +58,12 @@ export const authService = {
   },
 
   async updatePassword(password: string) {
-    const supabase = createClient();
-    return supabase.auth.updateUser({ password });
+    return requireClient().auth.updateUser({ password });
   },
 
   async getSession() {
-    const supabase = createClient();
-    return supabase.auth.getSession();
+    const client = tryCreateClient();
+    if (!client) return { data: { session: null }, error: null };
+    return client.auth.getSession();
   },
 };

@@ -1,4 +1,10 @@
 import { config } from "@/lib/config";
+import { isBackendConfigured } from "@/lib/runtime/config";
+import {
+  mockHealthSearch,
+  mockHealthTopicBySlug,
+  mockHealthTopicsForRisk,
+} from "@/lib/mock/health-library";
 import { authenticatedFetch } from "@/lib/api/authenticatedFetch";
 import type {
   HealthTopicDetail,
@@ -9,9 +15,14 @@ import type {
 const BASE = `${config.api.baseUrl}/api/v1/health-library`;
 
 export async function fetchHealthCategories(): Promise<string[]> {
-  const res = await fetch(`${BASE}/categories`);
-  if (!res.ok) return [];
-  return res.json() as Promise<string[]>;
+  if (!isBackendConfigured()) return mockHealthSearch({}).categories;
+  try {
+    const res = await fetch(`${BASE}/categories`);
+    if (!res.ok) return mockHealthSearch({}).categories;
+    return res.json() as Promise<string[]>;
+  } catch {
+    return mockHealthSearch({}).categories;
+  }
 }
 
 export async function searchHealthTopics(params: {
@@ -20,27 +31,48 @@ export async function searchHealthTopics(params: {
   blood_marker?: string;
   limit?: number;
 }): Promise<HealthTopicSearchResult> {
-  const url = new URL(`${BASE}/search`);
-  Object.entries(params).forEach(([k, v]) => {
-    if (v != null && v !== "") url.searchParams.set(k, String(v));
-  });
-  const res = await fetch(url.toString());
-  if (!res.ok) throw new Error("Search failed");
-  return res.json() as Promise<HealthTopicSearchResult>;
+  if (!isBackendConfigured()) return mockHealthSearch(params);
+  try {
+    const url = new URL(`${BASE}/search`);
+    Object.entries(params).forEach(([k, v]) => {
+      if (v != null && v !== "") url.searchParams.set(k, String(v));
+    });
+    const res = await fetch(url.toString());
+    if (!res.ok) throw new Error("Search failed");
+    return res.json() as Promise<HealthTopicSearchResult>;
+  } catch {
+    return mockHealthSearch(params);
+  }
 }
 
 export async function fetchHealthTopic(slug: string): Promise<HealthTopicDetail> {
-  const res = await fetch(`${BASE}/topics/${encodeURIComponent(slug)}`);
-  if (!res.ok) throw new Error("Topic not found");
-  return res.json() as Promise<HealthTopicDetail>;
+  if (!isBackendConfigured()) {
+    const topic = mockHealthTopicBySlug(slug);
+    if (!topic) throw new Error("Topic not found");
+    return topic;
+  }
+  try {
+    const res = await fetch(`${BASE}/topics/${encodeURIComponent(slug)}`);
+    if (!res.ok) throw new Error("Topic not found");
+    return res.json() as Promise<HealthTopicDetail>;
+  } catch {
+    const topic = mockHealthTopicBySlug(slug);
+    if (!topic) throw new Error("Topic not found");
+    return topic;
+  }
 }
 
 export async function fetchTopicsForRiskCategory(
   riskSlug: string
 ): Promise<HealthTopicSummary[]> {
-  const res = await fetch(`${BASE}/risk/${encodeURIComponent(riskSlug)}/topics`);
-  if (!res.ok) return [];
-  return res.json() as Promise<HealthTopicSummary[]>;
+  if (!isBackendConfigured()) return mockHealthTopicsForRisk(riskSlug);
+  try {
+    const res = await fetch(`${BASE}/risk/${encodeURIComponent(riskSlug)}/topics`);
+    if (!res.ok) return mockHealthTopicsForRisk(riskSlug);
+    return res.json() as Promise<HealthTopicSummary[]>;
+  } catch {
+    return mockHealthTopicsForRisk(riskSlug);
+  }
 }
 
 export async function fetchBookmarks(

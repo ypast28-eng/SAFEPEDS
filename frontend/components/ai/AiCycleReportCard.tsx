@@ -6,6 +6,7 @@ import { Button, Badge } from "@/components/ui";
 import { AiDisclaimer } from "./AiDisclaimer";
 import { AiExpandableSection } from "./AiExpandableSection";
 import { AiSourceList } from "./AiSourceList";
+import { AiUnavailableNotice, assertAiAvailable } from "./AiUnavailableNotice";
 import { useAuth } from "@/hooks/useAuth";
 import { generateCycleReport } from "@/services/ai";
 import type { AiCycleReportRequest, AiCycleReportResult } from "@/types/ai";
@@ -25,6 +26,7 @@ export function AiCycleReportCard({ request, compact = false }: AiCycleReportCar
     setIsLoading(true);
     setError(null);
     try {
+      assertAiAvailable();
       const result = await generateCycleReport(request, session?.access_token);
       setReport(result);
     } catch (e) {
@@ -47,6 +49,8 @@ export function AiCycleReportCard({ request, compact = false }: AiCycleReportCar
           {report ? "Regenerate" : "Generate"}
         </Button>
       </div>
+
+      <AiUnavailableNotice />
 
       {error && <p className="text-sm text-accent" role="alert">{error}</p>}
 

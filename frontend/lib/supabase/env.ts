@@ -1,22 +1,28 @@
 /**
- * Validates required Supabase environment variables.
- * Throws at runtime if misconfigured (avoids silent failures).
+ * Supabase environment helpers.
+ * Optional getters avoid crashes when env vars are missing (Vercel MVP / CI).
  */
 
-function getEnvVar(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(
-      `Missing environment variable: ${name}. Add it to .env.local (see .env.example).`
-    );
-  }
-  return value;
+import { config } from "@/lib/config";
+
+export function isSupabaseEnvConfigured(): boolean {
+  return Boolean(config.supabase.url && config.supabase.anonKey);
 }
 
 export function getSupabaseUrl(): string {
-  return getEnvVar("NEXT_PUBLIC_SUPABASE_URL");
+  if (!config.supabase.url) {
+    throw new Error(
+      "Missing environment variable: NEXT_PUBLIC_SUPABASE_URL. Add it to .env.local (see .env.example)."
+    );
+  }
+  return config.supabase.url;
 }
 
 export function getSupabaseAnonKey(): string {
-  return getEnvVar("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  if (!config.supabase.anonKey) {
+    throw new Error(
+      "Missing environment variable: NEXT_PUBLIC_SUPABASE_ANON_KEY. Add it to .env.local (see .env.example)."
+    );
+  }
+  return config.supabase.anonKey;
 }

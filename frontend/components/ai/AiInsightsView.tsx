@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { Button, Card, Badge } from "@/components/ui";
 import { AiDisclaimer } from "./AiDisclaimer";
 import { AiSourceList } from "./AiSourceList";
+import { AiUnavailableNotice, assertAiAvailable } from "./AiUnavailableNotice";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { fetchReportsWithStats } from "@/services/bloodwork";
@@ -32,6 +33,7 @@ export function AiInsightsView() {
     setIsLoading(true);
     setError(null);
     try {
+      assertAiAvailable();
       const [{ data: stats }, riskHist] = await Promise.all([
         fetchReportsWithStats(),
         fetchRiskHistory(user.id, 10),
@@ -83,6 +85,8 @@ export function AiInsightsView() {
           </Button>
         }
       />
+
+      <AiUnavailableNotice />
 
       {error && <p className="text-sm text-accent mb-4" role="alert">{error}</p>}
 

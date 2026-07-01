@@ -7,6 +7,7 @@ import { Button, Card, Badge } from "@/components/ui";
 import { AiDisclaimer } from "./AiDisclaimer";
 import { AiExpandableSection } from "./AiExpandableSection";
 import { AiSourceList } from "./AiSourceList";
+import { AiUnavailableNotice, assertAiAvailable } from "./AiUnavailableNotice";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useUserCycles } from "@/hooks/useUserCycles";
@@ -42,6 +43,7 @@ export function AiTimelineView() {
     setIsLoading(true);
     setError(null);
     try {
+      assertAiAvailable();
       const [{ data: stats }, riskHist] = await Promise.all([
         fetchReportsWithStats(),
         fetchRiskHistory(user.id, 10),
@@ -96,6 +98,8 @@ export function AiTimelineView() {
           </Button>
         }
       />
+
+      <AiUnavailableNotice />
 
       {error && <p className="text-sm text-accent mb-4" role="alert">{error}</p>}
 

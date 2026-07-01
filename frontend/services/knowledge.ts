@@ -1,4 +1,6 @@
 import { config } from "@/lib/config";
+import { isBackendConfigured } from "@/lib/runtime/config";
+import { MOCK_KB_CATEGORIES, mockKbArticleBySlug, mockKbSearch } from "@/lib/mock/knowledge";
 import { authenticatedFetch } from "@/lib/api/authenticatedFetch";
 import type {
   ArticleCreateInput,
@@ -33,29 +35,63 @@ function buildSearchUrl(params: KnowledgeSearchParams): string {
 }
 
 export async function fetchKnowledgeCategories(): Promise<KnowledgeCategory[]> {
-  const response = await fetch(`${BASE}/categories`);
-  if (!response.ok) throw new Error("Failed to load categories");
-  return response.json() as Promise<KnowledgeCategory[]>;
+  if (!isBackendConfigured()) return MOCK_KB_CATEGORIES;
+  try {
+    const response = await fetch(`${BASE}/categories`);
+    if (!response.ok) return MOCK_KB_CATEGORIES;
+    return response.json() as Promise<KnowledgeCategory[]>;
+  } catch {
+    return MOCK_KB_CATEGORIES;
+  }
 }
 
 export async function searchKnowledgeArticles(
   params: KnowledgeSearchParams
 ): Promise<KnowledgeSearchResult> {
-  const response = await fetch(buildSearchUrl(params));
-  if (!response.ok) throw new Error("Search failed");
-  return response.json() as Promise<KnowledgeSearchResult>;
+  if (!isBackendConfigured()) {
+    const { articles, total } = mockKbSearch(params.q, params.category);
+    return { articles, total };
+  }
+  try {
+    const response = await fetch(buildSearchUrl(params));
+    if (!response.ok) throw new Error("Search failed");
+    return response.json() as Promise<KnowledgeSearchResult>;
+  } catch {
+    const { articles, total } = mockKbSearch(params.q, params.category);
+    return { articles, total };
+  }
 }
 
 export async function fetchArticleBySlug(slug: string): Promise<ArticleDetail> {
-  const response = await fetch(`${BASE}/articles/${encodeURIComponent(slug)}`);
-  if (!response.ok) throw new Error("Article not found");
-  return response.json() as Promise<ArticleDetail>;
+  if (!isBackendConfigured()) {
+    const article = mockKbArticleBySlug(slug);
+    if (!article) throw new Error("Article not found");
+    return article;
+  }
+  try {
+    const response = await fetch(`${BASE}/articles/${encodeURIComponent(slug)}`);
+    if (!response.ok) throw new Error("Article not found");
+    return response.json() as Promise<ArticleDetail>;
+  } catch {
+    const article = mockKbArticleBySlug(slug);
+    if (!article) throw new Error("Article not found");
+    return article;
+  }
 }
 
 export async function fetchFeaturedArticles(): Promise<FeaturedArticles> {
-  const response = await fetch(`${BASE}/featured`);
-  if (!response.ok) throw new Error("Failed to load featured articles");
-  return response.json() as Promise<FeaturedArticles>;
+  if (!isBackendConfigured()) {
+    const articles = mockKbSearch().articles;
+    return { newest: articles, popular: articles, recently_updated: articles };
+  }
+  try {
+    const response = await fetch(`${BASE}/featured`);
+    if (!response.ok) throw new Error("Failed to load featured articles");
+    return response.json() as Promise<FeaturedArticles>;
+  } catch {
+    const articles = mockKbSearch().articles;
+    return { newest: articles, popular: articles, recently_updated: articles };
+  }
 }
 
 // ─── Admin (authenticated) ───────────────────────────────────────────────────

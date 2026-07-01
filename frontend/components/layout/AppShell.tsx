@@ -2,6 +2,7 @@
 
 import { useSidebar } from "@/hooks";
 import { Sidebar } from "./Sidebar";
+import { SetupWarningBanner } from "@/components/shared/SetupWarningBanner";
 import { cn } from "@/utils/cn";
 
 interface AppShellProps {
@@ -29,9 +30,11 @@ export function AppShell({ children }: AppShellProps) {
           isOpen && "lg:pl-60"
         )}
       >
-        {/* Top bar spacer for mobile menu button */}
         <div className="h-16 lg:h-0" />
-        <div className="p-4 sm:p-6 lg:p-8">{children}</div>
+        <div className="p-4 sm:p-6 lg:p-8">
+          <SetupWarningBanner />
+          {children}
+        </div>
       </main>
     </div>
   );

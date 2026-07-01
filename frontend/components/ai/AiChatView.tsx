@@ -7,6 +7,7 @@ import { Button, Card, Badge } from "@/components/ui";
 import { Textarea } from "@/components/ui/Textarea";
 import { AiDisclaimer } from "./AiDisclaimer";
 import { AiSourceList } from "./AiSourceList";
+import { AiUnavailableNotice, assertAiAvailable } from "./AiUnavailableNotice";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { fetchReportsWithStats } from "@/services/bloodwork";
@@ -64,6 +65,7 @@ export function AiChatView() {
       setIsLoading(true);
 
       try {
+        assertAiAvailable();
         const { data: stats } = await fetchReportsWithStats();
         const latestReport = stats.latestReport;
 
@@ -109,6 +111,8 @@ export function AiChatView() {
         badge="Educational Only"
         badgeVariant="warning"
       />
+
+      <AiUnavailableNotice />
 
       <Card variant="elevated" padding="none" className="flex-1 flex flex-col min-h-0 mb-4">
         <div className="flex-1 overflow-y-auto p-4 space-y-4">

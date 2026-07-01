@@ -1,4 +1,15 @@
-import { createClient } from "@/lib/supabase/client";
+import { calculateStatus } from "@/lib/bloodwork/status";
+import { isSupabaseEnvConfigured } from "@/lib/supabase/env";
+import { tryCreateClient } from "@/lib/supabase/client";
+import { MOCK_BLOOD_MARKERS } from "@/lib/mock/compounds";
+import {
+  localAppendResultsToReport,
+  localCreateReportWithResults,
+  localDeleteReport,
+  localFetchHistoryForMarker,
+  localFetchReportById,
+  localFetchReportsWithStats,
+} from "@/lib/local-storage/bloodwork";
 import type {
   BloodMarker,
   BloodworkDashboardStats,
@@ -6,29 +17,23 @@ import type {
   BloodworkReport,
   BloodworkReportWithResults,
   BloodworkResultInput,
-  BloodworkStatus,
   CreateReportInput,
   TrendTimeRange,
 } from "@/types/bloodwork";
 
-const BUCKET = "bloodwork-reports";
+export { calculateStatus } from "@/lib/bloodwork/status";
 
-export function calculateStatus(
-  value: number,
-  refLow: number | null,
-  refHigh: number | null
-): BloodworkStatus | null {
-  if (refLow !== null && value < refLow) return "Low";
-  if (refHigh !== null && value > refHigh) return "High";
-  if (refLow !== null || refHigh !== null) return "Normal";
-  return null;
-}
+const BUCKET = "bloodwork-reports";
 
 export async function fetchBloodMarkers(): Promise<{
   data: BloodMarker[];
   error: string | null;
 }> {
-  const supabase = createClient();
+  if (!isSupabaseEnvConfigured()) {
+    return { data: MOCK_BLOOD_MARKERS as BloodMarker[], error: null };
+  }
+
+  const supabase = tryCreateClient()!;
   const { data, error } = await supabase
     .from("blood_markers")
     .select("*")
@@ -43,7 +48,11 @@ export async function fetchReportsWithStats(): Promise<{
   data: BloodworkDashboardStats;
   error: string | null;
 }> {
-  const supabase = createClient();
+  if (!isSupabaseEnvConfigured()) {
+    return { data: localFetchReportsWithStats(), error: null };
+  }
+
+  const supabase = tryCreateClient()!;
   const { data: reports, error } = await supabase
     .from("bloodwork_reports")
     .select(`*, bloodwork_results (*)`)
@@ -57,11 +66,12 @@ export async function fetchReportsWithStats(): Promise<{
   }
 
   const enriched: BloodworkReportWithResults[] = (reports ?? []).map((r) => {
-    const results = (r.bloodwork_results ?? []) as BloodworkReportWithResults["bloodwork_results"];
+    const row = r as BloodworkReportWithResults & { bloodwork_results?: BloodworkReportWithResults["bloodwork_results"] };
+    const results = (row.bloodwork_results ?? []) as BloodworkReportWithResults["bloodwork_results"];
     const out_of_range_count = results.filter(
       (res) => res.status === "Low" || res.status === "High"
     ).length;
-    return { ...r, bloodwork_results: results, out_of_range_count };
+    return { ...row, bloodwork_results: results, out_of_range_count };
   });
 
   const latestReport = enriched[0] ?? null;
@@ -82,7 +92,11 @@ export async function fetchReportsWithStats(): Promise<{
 export async function fetchReportById(
   id: string
 ): Promise<{ data: BloodworkReportWithResults | null; error: string | null }> {
-  const supabase = createClient();
+  if (!isSupabaseEnvConfigured()) {
+    return { data: localFetchReportById(id), error: null };
+  }
+
+  const supabase = tryCreateClient()!;
   const { data, error } = await supabase
     .from("bloodwork_reports")
     .select(`*, bloodwork_results (*)`)
@@ -107,7 +121,11 @@ export async function createReportWithResults(
   userId: string,
   input: CreateReportInput
 ): Promise<{ data: BloodworkReport | null; error: string | null }> {
-  const supabase = createClient();
+  if (!isSupabaseEnvConfigured()) {
+    return { data: localCreateReportWithResults(input), error: null };
+  }
+
+  const supabase = tryCreateClient()!;
 
   const { data: report, error: reportError } = await supabase
     .from("bloodwork_reports")
@@ -150,7 +168,11 @@ export async function uploadReportFile(
   reportId: string,
   file: File
 ): Promise<{ url: string | null; error: string | null }> {
-  const supabase = createClient();
+  if (!isSupabaseEnvConfigured()) {
+    return { url: null, error: "File upload requires Supabase configuration." };
+  }
+
+  const supabase = tryCreateClient()!;
   const ext = file.name.split(".").pop() ?? "bin";
   const path = `${userId}/${reportId}/${Date.now()}.${ext}`;
 
@@ -193,7 +215,12 @@ export async function appendResultsToReport(
 ): Promise<{ error: string | null }> {
   if (results.length === 0) return { error: null };
 
-  const supabase = createClient();
+  if (!isSupabaseEnvConfigured()) {
+    localAppendResultsToReport(reportId, results);
+    return { error: null };
+  }
+
+  const supabase = tryCreateClient()!;
   const rows = results.map((r) => ({
     report_id: reportId,
     marker_name: r.marker_name,
@@ -210,7 +237,12 @@ export async function appendResultsToReport(
 }
 
 export async function deleteReport(id: string): Promise<{ error: string | null }> {
-  const supabase = createClient();
+  if (!isSupabaseEnvConfigured()) {
+    localDeleteReport(id);
+    return { error: null };
+  }
+
+  const supabase = tryCreateClient()!;
   const { error } = await supabase.from("bloodwork_reports").delete().eq("id", id);
   return { error: error?.message ?? null };
 }
@@ -219,7 +251,11 @@ export async function fetchHistoryForMarker(
   markerName: string,
   range: TrendTimeRange
 ): Promise<{ data: BloodworkHistoryPoint[]; error: string | null }> {
-  const supabase = createClient();
+  if (!isSupabaseEnvConfigured()) {
+    return { data: localFetchHistoryForMarker(markerName, range), error: null };
+  }
+
+  const supabase = tryCreateClient()!;
   let query = supabase
     .from("bloodwork_history")
     .select("*")
@@ -241,11 +277,14 @@ export async function fetchHistoryForMarker(
 export async function getSignedFileUrl(
   filePath: string
 ): Promise<{ url: string | null; error: string | null }> {
-  const supabase = createClient();
-  // If stored as full signed URL, return as-is
   if (filePath.startsWith("http")) {
     return { url: filePath, error: null };
   }
+  if (!isSupabaseEnvConfigured()) {
+    return { url: null, error: null };
+  }
+
+  const supabase = tryCreateClient()!;
   const { data, error } = await supabase.storage
     .from(BUCKET)
     .createSignedUrl(filePath, 3600);

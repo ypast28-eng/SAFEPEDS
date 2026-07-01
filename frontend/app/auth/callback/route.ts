@@ -11,7 +11,13 @@ export async function GET(request: Request) {
   const code = searchParams.get("code");
   const next = searchParams.get("next") ?? DEFAULT_LOGIN_REDIRECT;
 
-  if (code) {
+  if (!code) {
+    return NextResponse.redirect(
+      `${origin}/login?error=${encodeURIComponent("Authentication failed. Please try again.")}`
+    );
+  }
+
+  try {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
@@ -19,6 +25,10 @@ export async function GET(request: Request) {
       const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : DEFAULT_LOGIN_REDIRECT;
       return NextResponse.redirect(`${origin}${safeNext}`);
     }
+  } catch {
+    return NextResponse.redirect(
+      `${origin}/login?error=${encodeURIComponent("Supabase is not configured.")}`
+    );
   }
 
   return NextResponse.redirect(

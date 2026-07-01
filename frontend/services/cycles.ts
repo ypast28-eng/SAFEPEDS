@@ -1,4 +1,13 @@
-import { createClient } from "@/lib/supabase/client";
+import { isSupabaseEnvConfigured } from "@/lib/supabase/env";
+import { tryCreateClient } from "@/lib/supabase/client";
+import { config } from "@/lib/config";
+import {
+  localDeleteCycle,
+  localDuplicateCycle,
+  localFetchCycleById,
+  localFetchUserCycles,
+  localSaveCycle,
+} from "@/lib/local-storage/cycles";
 import type { CycleCompoundDraft, CycleMetadataDraft, UserCycleWithCompounds, UserCycleWithCount } from "@/types/cycles";
 
 const CYCLE_COMPOUND_SELECT = `
@@ -14,7 +23,11 @@ export async function fetchUserCycles(): Promise<{
   data: UserCycleWithCount[];
   error: string | null;
 }> {
-  const supabase = createClient();
+  if (!isSupabaseEnvConfigured()) {
+    return { data: localFetchUserCycles(), error: null };
+  }
+
+  const supabase = tryCreateClient()!;
   const { data: cycles, error } = await supabase
     .from("user_cycles")
     .select("*")
@@ -28,18 +41,18 @@ export async function fetchUserCycles(): Promise<{
     .select("cycle_id")
     .in(
       "cycle_id",
-      cycles.map((c) => c.id)
+      cycles.map((c: { id: string }) => c.id)
     );
 
   if (countError) return { data: [], error: countError.message };
 
-  const countMap = (counts ?? []).reduce<Record<string, number>>((acc, row) => {
+  const countMap = (counts ?? []).reduce<Record<string, number>>((acc: Record<string, number>, row: { cycle_id: string }) => {
     acc[row.cycle_id] = (acc[row.cycle_id] ?? 0) + 1;
     return acc;
   }, {});
 
   const result: UserCycleWithCount[] = cycles.map((cycle) => ({
-    ...cycle,
+    ...(cycle as UserCycleWithCount),
     compound_count: countMap[cycle.id] ?? 0,
   }));
 
@@ -49,7 +62,11 @@ export async function fetchUserCycles(): Promise<{
 export async function fetchCycleById(
   id: string
 ): Promise<{ data: UserCycleWithCompounds | null; error: string | null }> {
-  const supabase = createClient();
+  if (!isSupabaseEnvConfigured()) {
+    return { data: localFetchCycleById(id), error: null };
+  }
+
+  const supabase = tryCreateClient()!;
   const { data, error } = await supabase
     .from("user_cycles")
     .select(`*, cycle_compounds (${CYCLE_COMPOUND_SELECT})`)
@@ -70,7 +87,12 @@ export async function fetchCycleById(
 }
 
 export async function deleteCycle(id: string): Promise<{ error: string | null }> {
-  const supabase = createClient();
+  if (!isSupabaseEnvConfigured()) {
+    localDeleteCycle(id);
+    return { error: null };
+  }
+
+  const supabase = tryCreateClient()!;
   const { error } = await supabase.from("user_cycles").delete().eq("id", id);
   return { error: error?.message ?? null };
 }
@@ -81,7 +103,11 @@ export async function saveCycle(
   metadata: CycleMetadataDraft,
   compounds: CycleCompoundDraft[]
 ): Promise<{ data: { id: string } | null; error: string | null }> {
-  const supabase = createClient();
+  if (!isSupabaseEnvConfigured()) {
+    return { data: localSaveCycle(cycleId, metadata, compounds), error: null };
+  }
+
+  const supabase = tryCreateClient()!;
 
   const cyclePayload = {
     user_id: userId,
@@ -142,6 +168,11 @@ export async function duplicateCycle(
   userId: string,
   cycleId: string
 ): Promise<{ data: { id: string } | null; error: string | null }> {
+  if (!isSupabaseEnvConfigured()) {
+    const result = localDuplicateCycle(cycleId);
+    return result ? { data: result, error: null } : { data: null, error: "Cycle not found" };
+  }
+
   const { data: original, error } = await fetchCycleById(cycleId);
   if (error || !original) return { data: null, error: error ?? "Cycle not found" };
 
