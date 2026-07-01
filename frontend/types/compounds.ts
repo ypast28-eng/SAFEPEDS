@@ -1,5 +1,3 @@
-import type { DoseUnit } from "@/lib/constants/cycles";
-
 export interface CompoundCategory {
   id: string;
   name: string;
