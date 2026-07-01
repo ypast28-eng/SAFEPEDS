@@ -20,6 +20,7 @@ export interface Profile {
   weight: number | null;
   body_fat: number | null;
   training_experience: TrainingExperience | null;
+  is_admin: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -32,5 +33,6 @@ export type ProfileUpdate = {
   weight?: number | null;
   body_fat?: number | null;
   training_experience?: TrainingExperience | null;
+  is_admin?: boolean;
   updated_at?: string;
 };

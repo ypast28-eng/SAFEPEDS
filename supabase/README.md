@@ -13,6 +13,8 @@
 | 7 | `migrations/20250704000001_seed_risk_rules.sql` | 5 |
 | 8 | `migrations/20250705000000_ai_intelligence.sql` | 6 |
 | 9 | `migrations/20250705000001_seed_educational_content.sql` | 6 |
+| 10 | `migrations/20250706000000_knowledge_base.sql` | 7 |
+| 11 | `migrations/20250706000001_seed_knowledge_base.sql` | 7 |
 
 ### Option A — SQL Editor
 

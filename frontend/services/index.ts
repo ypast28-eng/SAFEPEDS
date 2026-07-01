@@ -35,3 +35,15 @@ export {
   sendChatMessage,
   fetchChatHistory,
 } from "./ai";
+export {
+  fetchKnowledgeCategories,
+  searchKnowledgeArticles,
+  fetchArticleBySlug,
+  fetchFeaturedArticles,
+  adminListArticles,
+  adminCreateArticle,
+  adminUpdateArticle,
+  adminDeleteArticle,
+  adminCreateReference,
+  uploadKnowledgeImage,
+} from "./knowledge";

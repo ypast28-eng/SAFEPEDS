@@ -146,6 +146,30 @@ SUPABASE_KEY=your-service-role-key
 
 AI endpoints require `Authorization: Bearer <supabase_access_token>` from the frontend session.
 
+## Phase 7 — Complete
+
+- [x] `knowledge_categories`, `knowledge_articles`, `knowledge_references` tables
+- [x] `compound_articles` and `blood_marker_articles` junction tables
+- [x] Full-text search with filters (compound, blood marker, peptide, SARM, keyword, category)
+- [x] Article detail pages with related compounds, markers, references
+- [x] RAG integration — AI prioritizes Knowledge Base articles as context
+- [x] Admin CMS at `/admin/knowledge` (requires `profiles.is_admin`)
+- [x] Featured articles on homepage (newest, popular, recently updated)
+- [x] 20 seeded categories and starter articles
+
+### Apply Phase 7 migrations
+
+```bash
+# 10. supabase/migrations/20250706000000_knowledge_base.sql
+# 11. supabase/migrations/20250706000001_seed_knowledge_base.sql
+```
+
+### Grant admin access
+
+```sql
+update public.profiles set is_admin = true where email = 'your-admin@email.com';
+```
+
 ## Getting Started
 
 ### 1. Supabase project

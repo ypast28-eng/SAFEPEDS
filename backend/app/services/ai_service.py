@@ -25,7 +25,9 @@ from app.ai.models import (
 from app.ai.prompts import SYSTEM_PROMPT
 from app.ai.rate_limiter import ai_rate_limiter
 from app.ai.security import validate_chat_message
+from app.knowledge import rag as kb_rag
 from app.repositories import ai as ai_repo
+from app.repositories import knowledge as kb_repo
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +42,8 @@ def _merge_sources(
     article_sources = result_articles or [
         AiSourceReference(
             title=a.get("title", ""),
-            url=f"/knowledge-base?article={a.get('slug', '')}",
-            source_type="article",
+            url=f"/knowledge-base/articles/{a.get('slug', '')}",
+            source_type="knowledge_base",
         )
         for a in articles[:5]
     ]
@@ -57,9 +59,37 @@ def _merge_sources(
     return article_sources, sci_sources
 
 
-async def _load_education(tags: list[str] | None = None) -> tuple[list[dict], list[dict]]:
-    articles = await ai_repo.fetch_articles(tags=tags)
-    references = await ai_repo.fetch_references()
+async def _load_education(
+    query: str | None = None,
+    tags: list[str] | None = None,
+    blood_markers: list[str] | None = None,
+) -> tuple[list[dict], list[dict]]:
+    """Load Knowledge Base articles (RAG) as primary AI context."""
+    keyword = query or (" ".join(tags) if tags else None)
+    if blood_markers:
+        articles = await kb_rag.retrieve_for_markers(blood_markers, limit=6)
+        if keyword:
+            extra = await kb_rag.retrieve_for_query(keyword, limit=4)
+            seen = {a.get("slug") for a in articles}
+            for e in extra:
+                if e.get("slug") not in seen:
+                    articles.append(e)
+    elif keyword:
+        articles = await kb_rag.retrieve_for_query(keyword, limit=8)
+    else:
+        result = await kb_repo.search_articles(sort="popular", limit=6)
+        articles = [
+            {
+                "slug": a.get("slug"),
+                "title": a.get("title"),
+                "summary": a.get("summary"),
+                "source_type": "knowledge_base",
+            }
+            for a in result.get("articles", [])
+        ]
+
+    slugs = [a.get("slug") for a in articles if a.get("slug")]
+    references = await kb_rag.retrieve_references_for_articles(slugs)
     return articles, references
 
 
@@ -78,7 +108,11 @@ async def _generate_or_fallback(
     if not allowed:
         raise ValueError(f"Rate limit exceeded. Try again in {retry_after} seconds.")
 
-    articles, references = await _load_education(tags)
+    articles, references = await _load_education(
+        query=context.get("report", {}).get("report_name"),
+        tags=tags,
+        blood_markers=[m.get("marker_name") for m in context.get("report", {}).get("markers", [])[:6]],
+    )
     user_prompt = prompt_builder(context, articles)
     p_hash = ai_repo.prompt_hash(user_prompt)
 
@@ -239,7 +273,14 @@ async def chat(
             disclaimer=AI_DISCLAIMER,
         )
 
-    articles, references = await _load_education()
+    articles, references = await _load_education(
+        query=sanitized,
+        blood_markers=[
+            m.get("marker_name")
+            for m in (context.get("report") or {}).get("markers", [])
+            if m.get("marker_name")
+        ][:6],
+    )
     memory = await ai_repo.fetch_user_memory(user_id)
     context = request.model_dump(exclude={"message"})
 

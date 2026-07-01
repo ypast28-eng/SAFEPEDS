@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { CompoundKnowledgeExplorer } from "@/components/cycles/CompoundKnowledgeExplorer";
+import { KnowledgeBaseHub } from "@/components/knowledge";
 
 export const metadata: Metadata = {
   title: "Knowledge Base",
@@ -11,11 +11,11 @@ export default function KnowledgeBasePage() {
     <div>
       <PageHeader
         title="Knowledge Base"
-        description="Browse the compound knowledge database. All data is loaded from Supabase — educational content only."
-        badge="Database-Driven"
+        description="Scientific educational articles on compounds, bloodwork, and health monitoring. Primary source for AI explanations."
+        badge="RAG-Powered"
         badgeVariant="primary"
       />
-      <CompoundKnowledgeExplorer />
+      <KnowledgeBaseHub />
     </div>
   );
 }

@@ -10,6 +10,44 @@ interface AiSourceListProps {
   title?: string;
 }
 
+function SourceLink({ source }: { source: AiSourceReference }) {
+  const icon =
+    source.source_type === "scientific" ? (
+      <ExternalLink className="h-3 w-3" />
+    ) : source.source_type === "knowledge_base" ? (
+      <BookOpen className="h-3 w-3" />
+    ) : (
+      <FlaskConical className="h-3 w-3" />
+    );
+
+  const className = "text-xs text-primary hover:underline flex items-center gap-1.5";
+
+  if (source.url?.startsWith("http")) {
+    return (
+      <a href={source.url} target="_blank" rel="noopener noreferrer" className={className}>
+        {icon}
+        {source.title}
+      </a>
+    );
+  }
+
+  if (source.url?.startsWith("/")) {
+    return (
+      <Link href={source.url} className={className}>
+        {icon}
+        {source.title}
+      </Link>
+    );
+  }
+
+  return (
+    <Link href="/knowledge-base" className={className}>
+      {icon}
+      {source.title}
+    </Link>
+  );
+}
+
 export function AiSourceList({ articles = [], references = [], title = "Sources" }: AiSourceListProps) {
   const all = [...articles, ...references];
   if (all.length === 0) return null;
@@ -20,31 +58,7 @@ export function AiSourceList({ articles = [], references = [], title = "Sources"
       <ul className="space-y-1.5">
         {all.map((source, i) => (
           <li key={`${source.title}-${i}`}>
-            {source.url ? (
-              <a
-                href={source.url.startsWith("http") ? source.url : undefined}
-                target={source.url.startsWith("http") ? "_blank" : undefined}
-                rel={source.url.startsWith("http") ? "noopener noreferrer" : undefined}
-                className="text-xs text-primary hover:underline flex items-center gap-1.5"
-              >
-                {source.source_type === "scientific" ? (
-                  <ExternalLink className="h-3 w-3" />
-                ) : source.source_type === "knowledge_base" ? (
-                  <FlaskConical className="h-3 w-3" />
-                ) : (
-                  <BookOpen className="h-3 w-3" />
-                )}
-                {source.title}
-              </a>
-            ) : (
-              <Link
-                href="/knowledge-base"
-                className="text-xs text-primary hover:underline flex items-center gap-1.5"
-              >
-                <BookOpen className="h-3 w-3" />
-                {source.title}
-              </Link>
-            )}
+            <SourceLink source={source} />
             {source.citation_text && (
               <p className="text-xs text-muted/70 ml-4 mt-0.5 italic">{source.citation_text}</p>
             )}

@@ -4,6 +4,7 @@ import {
   FeaturesSection,
   PricingSection,
   FAQSection,
+  FeaturedArticlesSection,
 } from "@/components/marketing";
 
 export default function HomePage() {
@@ -13,6 +14,7 @@ export default function HomePage() {
       <main>
         <HeroSection />
         <FeaturesSection />
+        <FeaturedArticlesSection />
         <PricingSection />
         <FAQSection />
       </main>
