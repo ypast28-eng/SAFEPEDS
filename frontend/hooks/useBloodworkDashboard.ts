@@ -1,0 +1,42 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { deleteReport, fetchReportsWithStats } from "@/services/bloodwork";
+import type { BloodworkDashboardStats } from "@/types/bloodwork";
+
+const EMPTY_STATS: BloodworkDashboardStats = {
+  totalReports: 0,
+  latestReport: null,
+  previousReports: [],
+  totalOutOfRange: 0,
+};
+
+export function useBloodworkDashboard() {
+  const [stats, setStats] = useState<BloodworkDashboardStats>(EMPTY_STATS);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    const { data, error: err } = await fetchReportsWithStats();
+    setStats(data);
+    setError(err);
+    setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const remove = useCallback(
+    async (id: string) => {
+      const { error: err } = await deleteReport(id);
+      if (!err) await refresh();
+      return { error: err };
+    },
+    [refresh]
+  );
+
+  return { stats, isLoading, error, refresh, remove };
+}

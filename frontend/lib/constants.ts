@@ -21,16 +21,52 @@ export const APP_NAV_ITEMS: NavItem[] = [
     description: "Plan and track compound cycles",
   },
   {
+    label: "My Cycles",
+    href: "/my-cycles",
+    icon: "Layers",
+    description: "View and manage saved cycles",
+  },
+  {
     label: "Bloodwork",
     href: "/bloodwork",
     icon: "Droplets",
     description: "Log and visualize lab results",
   },
   {
+    label: "Risk Dashboard",
+    href: "/risk",
+    icon: "ShieldAlert",
+    description: "Educational risk scores and monitoring",
+  },
+  {
+    label: "AI Chat",
+    href: "/ai/chat",
+    icon: "Brain",
+    description: "Educational health assistant",
+  },
+  {
+    label: "AI Insights",
+    href: "/ai/insights",
+    icon: "Brain",
+    description: "Trend-based educational observations",
+  },
+  {
+    label: "AI Timeline",
+    href: "/ai/timeline",
+    icon: "Brain",
+    description: "Chronological health summary",
+  },
+  {
     label: "Knowledge Base",
     href: "/knowledge-base",
     icon: "BookOpen",
     description: "Educational resources and guides",
+  },
+  {
+    label: "Health Library",
+    href: "/health-library",
+    icon: "Heart",
+    description: "Bloodwork findings and health education",
   },
   {
     label: "Settings",

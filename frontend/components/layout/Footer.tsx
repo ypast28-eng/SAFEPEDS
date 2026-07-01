@@ -14,9 +14,9 @@ const FOOTER_LINKS = {
     { label: "Knowledge Base", href: "/knowledge-base" },
   ],
   Legal: [
-    { label: "Privacy Policy", href: "#" },
-    { label: "Terms of Service", href: "#" },
-    { label: "Medical Disclaimer", href: "#" },
+    { label: "Privacy Policy", href: "/privacy" },
+    { label: "Terms of Service", href: "/terms" },
+    { label: "Medical Disclaimer", href: "/disclaimer" },
   ],
 };
 
