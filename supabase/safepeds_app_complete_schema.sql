@@ -1,15 +1,7 @@
 -- =============================================================================
 -- SAFEPEDS / PED Health AI — complete schema for Supabase SQL Editor
 -- Paste and Run once on a NEW empty project (or empty public schema).
---
--- App table names (Vercel frontend):
---   profiles, user_cycles, compounds, cycle_compounds,
---   bloodwork_reports (not \"bloodwork\"), bloodwork_results (not \"lab_results\"),
---   bloodwork_history, blood_markers
--- Notes: text columns on user_cycles, cycle_compounds, bloodwork_reports
---         (no standalone public.notes table in the app).
---
--- Do NOT also run PEDSAFE migrations (cycles / bloodwork / lab_results).
+-- Fixed: risk_category_health_topics seed uses v.risk_slug (not v.slug).
 -- =============================================================================
 
 -- ─── 20250701000000_create_profiles.sql ───
@@ -3140,7 +3132,7 @@ on conflict do nothing;
 
 -- Risk category → health topic links
 insert into public.risk_category_health_topics (risk_category_slug, topic_id)
-select v.slug, t.id from (values
+select v.risk_slug, t.id from (values
   ('liver', 'elevated-alt'),
   ('liver', 'elevated-ast'),
   ('liver', 'elevated-ggt'),

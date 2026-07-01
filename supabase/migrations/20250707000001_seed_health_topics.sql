@@ -236,7 +236,7 @@ on conflict do nothing;
 
 -- Risk category → health topic links
 insert into public.risk_category_health_topics (risk_category_slug, topic_id)
-select v.slug, t.id from (values
+select v.risk_slug, t.id from (values
   ('liver', 'elevated-alt'),
   ('liver', 'elevated-ast'),
   ('liver', 'elevated-ggt'),
