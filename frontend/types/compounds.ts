@@ -28,7 +28,7 @@ export type Administration =
 
 export interface Compound {
   id: string;
-  category_id: string;
+  category_id?: string | null;
   name: string;
   scientific_name: string | null;
   compound_type: CompoundType;
