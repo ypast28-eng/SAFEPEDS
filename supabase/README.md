@@ -17,17 +17,46 @@
 | 11 | `migrations/20250706000001_seed_knowledge_base.sql` | 7 |
 | 12 | `migrations/20250707000000_health_support_library.sql` | 8 |
 | 13 | `migrations/20250707000001_seed_health_topics.sql` | 8 |
+| 14 | `migrations/20250708000000_pedsafe_complete_schema.sql` | PEDSAFE (greenfield) |
 
-### Option A — SQL Editor
+### Option A — Supabase Dashboard + GitHub (no manual SQL copy)
 
-Run each file in order in **SQL Editor**.
+Use this to deploy migrations from the repo without pasting SQL.
 
-### Option B — Supabase CLI
+1. **Push this repo to GitHub** (branch `main` must contain `supabase/migrations/`).
+
+2. **Open Supabase Dashboard** → your project → **Project Settings** (gear) → **Integrations**.
+
+3. Click **GitHub** → **Authorize** → select repository **`ypast28-eng/SAFEPEDS`** (or your fork).
+
+4. Enable **Supabase integration** for the repo and set:
+   - **Supabase directory:** `supabase`
+   - **Production branch:** `main`
+
+5. Go to **Database** → **Migrations** in the left sidebar.
+
+6. You should see pending migrations from `supabase/migrations/`. Click **Deploy** (or **Run migration**) on each pending file, or **Deploy all** if offered.
+
+7. Wait for success. Confirm tables in **Table Editor**: `profiles`, `compounds`, `cycles`, `bloodwork`, `lab_results`, `notes`.
+
+> **Note:** Migrations `1–13` power the full SAFEPEDS app (`user_cycles`, `bloodwork_reports`, …).  
+> Migration `14` (`pedsafe_complete_schema`) is for **greenfield PEDSAFE** table names only.  
+> On a **new empty project**, run either the full chain `1–13` **or** only `14` — not both if you want one schema model.
+
+### Option B — Supabase CLI (no manual SQL copy)
 
 ```bash
-supabase link --project-ref your-project-ref
+npm install -g supabase   # or: npx supabase
+supabase login
+supabase link --project-ref YOUR_PROJECT_REF
 supabase db push
 ```
+
+`db push` applies every migration in `supabase/migrations/` that is not yet recorded in `supabase_migrations.schema_migrations`.
+
+### Option C — SQL Editor (manual)
+
+Run each file in order in **SQL Editor** (copy/paste).
 
 ### Regenerate compound seed
 

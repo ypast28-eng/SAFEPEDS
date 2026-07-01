@@ -1,12 +1,11 @@
--- =============================================================================
--- PEDSAFE — Complete Supabase Schema (source copy)
+-- Migration: 20250708000000_pedsafe_complete_schema
+-- PEDSAFE — Complete core schema (profiles, compounds, cycles, bloodwork, lab_results, notes)
 --
--- Canonical migration file:
---   supabase/migrations/20250708000000_pedsafe_complete_schema.sql
+-- GREENFIELD ONLY: Use on a new Supabase project OR when migrations 1–13 are NOT applied.
+-- The SAFEPEDS app (Phases 2–8) uses user_cycles, bloodwork_reports, etc. — different tables.
+-- This migration is idempotent (IF NOT EXISTS / DROP POLICY IF EXISTS) for safe re-runs on empty DBs.
 --
--- Prefer applying via Supabase Dashboard + GitHub integration (see supabase/README.md).
--- Manual paste: copy this file OR the migration file into SQL Editor.
--- =============================================================================
+-- Apply via Supabase Dashboard + GitHub (see supabase/README.md) — no manual SQL copy required.
 
 -- ─── Extensions ─────────────────────────────────────────────────────────────
 
