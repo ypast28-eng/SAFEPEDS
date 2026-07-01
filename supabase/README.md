@@ -15,6 +15,8 @@
 | 9 | `migrations/20250705000001_seed_educational_content.sql` | 6 |
 | 10 | `migrations/20250706000000_knowledge_base.sql` | 7 |
 | 11 | `migrations/20250706000001_seed_knowledge_base.sql` | 7 |
+| 12 | `migrations/20250707000000_health_support_library.sql` | 8 |
+| 13 | `migrations/20250707000001_seed_health_topics.sql` | 8 |
 
 ### Option A — SQL Editor
 
@@ -101,6 +103,32 @@ Cached AI-generated reports (bloodwork, cycle, timeline, insights).
 ### `ai_chat_messages`
 Persisted chat history per user.
 
+## Phase 7 tables
+
+### `knowledge_categories`, `knowledge_articles`, `knowledge_references`
+Educational knowledge base with full-text search and RAG integration.
+
+### `compound_articles`, `blood_marker_articles`
+Junction tables linking articles to compounds and blood markers.
+
+## Phase 8 tables
+
+### `health_topics`
+Educational health support topics (bloodwork findings, health concerns, monitoring).
+
+### `support_options`, `support_details`
+Structured support content per topic (Lifestyle, Monitoring, Nutrition, Supplement, Medication Information, Educational).
+
+### Junction tables
+- `health_topic_blood_markers` — links topics to blood marker catalog
+- `health_topic_compounds` — links topics to compounds
+- `health_topic_knowledge_articles` — links topics to knowledge base articles
+- `risk_category_health_topics` — links risk categories to relevant topics
+
+### User engagement
+- `health_topic_bookmarks` — saved topics per user
+- `health_topic_views` — recently viewed topics per user
+
 ## RLS summary
 
 | Table | Access |
@@ -123,6 +151,12 @@ Persisted chat history per user.
 | `ai_audit_logs` | Owner read |
 | `ai_reports` | Owner read |
 | `ai_chat_messages` | Owner CRUD |
+| `knowledge_categories` | Authenticated read |
+| `knowledge_articles` | Published read; admin CRUD |
+| `health_topics` | Published read; admin CRUD |
+| `support_options`, `support_details` | Published read via topic; admin CRUD |
+| `health_topic_bookmarks` | Owner CRUD |
+| `health_topic_views` | Owner insert/read |
 
 ## Auth redirect URLs
 

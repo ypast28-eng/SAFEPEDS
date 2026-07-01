@@ -25,6 +25,7 @@ from app.ai.models import (
 from app.ai.prompts import SYSTEM_PROMPT
 from app.ai.rate_limiter import ai_rate_limiter
 from app.ai.security import validate_chat_message
+from app.health_library import rag as hl_rag
 from app.knowledge import rag as kb_rag
 from app.repositories import ai as ai_repo
 from app.repositories import knowledge as kb_repo
@@ -35,11 +36,20 @@ logger = logging.getLogger(__name__)
 def _merge_sources(
     result_articles: list[AiSourceReference],
     result_refs: list[AiSourceReference],
+    health_topics: list[dict],
     articles: list[dict],
     references: list[dict],
 ) -> tuple[list[AiSourceReference], list[AiSourceReference]]:
-    """Ensure platform sources are always attached."""
-    article_sources = result_articles or [
+    """Ensure Health Library, Knowledge Base, and scientific sources are attached."""
+    health_sources = [
+        AiSourceReference(
+            title=h.get("title", ""),
+            url=h.get("url", f"/health-library/{h.get('slug', '')}"),
+            source_type="article",
+        )
+        for h in health_topics[:5]
+    ]
+    kb_sources = [
         AiSourceReference(
             title=a.get("title", ""),
             url=f"/knowledge-base/articles/{a.get('slug', '')}",
@@ -47,11 +57,12 @@ def _merge_sources(
         )
         for a in articles[:5]
     ]
+    article_sources = result_articles or (health_sources + kb_sources)
     sci_sources = result_refs or [
         AiSourceReference(
             title=r.get("title", ""),
             url=r.get("url"),
-            citation_text=r.get("citation_text"),
+            citation_text=r.get("citation_text") or r.get("authors"),
             source_type="scientific",
         )
         for r in references[:5]
@@ -63,34 +74,32 @@ async def _load_education(
     query: str | None = None,
     tags: list[str] | None = None,
     blood_markers: list[str] | None = None,
-) -> tuple[list[dict], list[dict]]:
-    """Load Knowledge Base articles (RAG) as primary AI context."""
+    risk_category: str | None = None,
+) -> tuple[list[dict], list[dict], list[dict]]:
+    """Load Health Library (primary) + Knowledge Base (secondary) for AI context."""
     keyword = query or (" ".join(tags) if tags else None)
+
+    health_topics = await hl_rag.retrieve_for_query(
+        query=keyword,
+        blood_markers=blood_markers,
+        risk_category=risk_category,
+        limit=6,
+    )
+
     if blood_markers:
-        articles = await kb_rag.retrieve_for_markers(blood_markers, limit=6)
-        if keyword:
-            extra = await kb_rag.retrieve_for_query(keyword, limit=4)
-            seen = {a.get("slug") for a in articles}
-            for e in extra:
-                if e.get("slug") not in seen:
-                    articles.append(e)
+        kb_articles = await kb_rag.retrieve_for_markers(blood_markers, limit=4)
     elif keyword:
-        articles = await kb_rag.retrieve_for_query(keyword, limit=8)
+        kb_articles = await kb_rag.retrieve_for_query(keyword, limit=4)
     else:
-        result = await kb_repo.search_articles(sort="popular", limit=6)
-        articles = [
-            {
-                "slug": a.get("slug"),
-                "title": a.get("title"),
-                "summary": a.get("summary"),
-                "source_type": "knowledge_base",
-            }
+        result = await kb_repo.search_articles(sort="popular", limit=4)
+        kb_articles = [
+            {"slug": a.get("slug"), "title": a.get("title"), "summary": a.get("summary")}
             for a in result.get("articles", [])
         ]
 
-    slugs = [a.get("slug") for a in articles if a.get("slug")]
+    slugs = [a.get("slug") for a in kb_articles if a.get("slug")]
     references = await kb_rag.retrieve_references_for_articles(slugs)
-    return articles, references
+    return health_topics, kb_articles, references
 
 
 async def _generate_or_fallback(
@@ -108,12 +117,12 @@ async def _generate_or_fallback(
     if not allowed:
         raise ValueError(f"Rate limit exceeded. Try again in {retry_after} seconds.")
 
-    articles, references = await _load_education(
+    health_topics, articles, references = await _load_education(
         query=context.get("report", {}).get("report_name"),
         tags=tags,
         blood_markers=[m.get("marker_name") for m in context.get("report", {}).get("markers", [])[:6]],
     )
-    user_prompt = prompt_builder(context, articles)
+    user_prompt = prompt_builder(context, health_topics, articles)
     p_hash = ai_repo.prompt_hash(user_prompt)
 
     parsed, meta = await openai_client.generate_structured(
@@ -124,13 +133,14 @@ async def _generate_or_fallback(
 
     if parsed is None:
         meta["used_fallback"] = True
-        result = fallback_fn(context, articles, references)
+        result = fallback_fn(context, health_topics + articles, references)
     else:
         result = parsed
         # Attach sources from platform if AI response lacks them
         arts, refs = _merge_sources(
             getattr(result, "related_articles", []),
             getattr(result, "scientific_references", []),
+            health_topics,
             articles,
             references,
         )
@@ -175,7 +185,7 @@ async def generate_bloodwork_report(
         feature="bloodwork_report",
         user_id=user_id,
         context=context,
-        prompt_builder=lambda ctx, arts: prompts.build_bloodwork_prompt(ctx, arts),
+        prompt_builder=lambda ctx, ht, arts: prompts.build_bloodwork_prompt(ctx, ht, arts),
         response_model=AiBloodworkReportResult,
         fallback_fn=fallback.generate_bloodwork_report,
         tags=tags,
@@ -194,7 +204,7 @@ async def generate_cycle_report(
         feature="cycle_report",
         user_id=user_id,
         context=context,
-        prompt_builder=lambda ctx, arts: prompts.build_cycle_prompt(ctx, arts),
+        prompt_builder=lambda ctx, ht, arts: prompts.build_cycle_prompt(ctx, ht, arts),
         response_model=AiCycleReportResult,
         fallback_fn=fallback.generate_cycle_report,
         tags=["cycles", "risk"],
@@ -213,7 +223,7 @@ async def generate_timeline(
         feature="timeline",
         user_id=user_id,
         context=context,
-        prompt_builder=lambda ctx, _: prompts.build_timeline_prompt(ctx),
+        prompt_builder=lambda ctx, ht, arts: prompts.build_timeline_prompt(ctx, ht, arts),
         response_model=AiTimelineResult,
         fallback_fn=fallback.generate_timeline,
         report_type="timeline",
@@ -231,7 +241,7 @@ async def generate_insights(
         feature="insights",
         user_id=user_id,
         context=context,
-        prompt_builder=lambda ctx, _: prompts.build_insights_prompt(ctx),
+        prompt_builder=lambda ctx, ht, arts: prompts.build_insights_prompt(ctx, ht, arts),
         response_model=AiInsightsResult,
         fallback_fn=fallback.generate_insights,
         tags=tags,
@@ -273,7 +283,8 @@ async def chat(
             disclaimer=AI_DISCLAIMER,
         )
 
-    articles, references = await _load_education(
+    context = request.model_dump(exclude={"message"})
+    health_topics, articles, references = await _load_education(
         query=sanitized,
         blood_markers=[
             m.get("marker_name")
@@ -282,9 +293,8 @@ async def chat(
         ][:6],
     )
     memory = await ai_repo.fetch_user_memory(user_id)
-    context = request.model_dump(exclude={"message"})
 
-    user_prompt = prompts.build_chat_prompt(sanitized, context, articles, memory)
+    user_prompt = prompts.build_chat_prompt(sanitized, context, health_topics, articles, memory)
     p_hash = ai_repo.prompt_hash(user_prompt)
 
     parsed, meta = await openai_client.generate_structured(
@@ -295,9 +305,9 @@ async def chat(
 
     if parsed is None:
         meta["used_fallback"] = True
-        result = fallback.generate_chat_reply(sanitized, context, articles, references)
+        result = fallback.generate_chat_reply(sanitized, context, health_topics + articles, references)
     else:
-        arts, refs = _merge_sources(parsed.sources, [], articles, references)
+        arts, refs = _merge_sources(parsed.sources, [], health_topics, articles, references)
         result = AiChatResponse(
             reply=parsed.reply,
             sources=arts + refs,

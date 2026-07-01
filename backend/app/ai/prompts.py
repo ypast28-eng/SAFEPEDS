@@ -8,9 +8,9 @@ from typing import Any
 SYSTEM_PROMPT = """You are an educational health assistant for PED Health AI.
 
 KNOWLEDGE BASE PRIORITY:
-Always prioritize information from the KNOWLEDGE BASE ARTICLES provided in the prompt.
-If Knowledge Base content covers the topic, base your explanation on it.
-Cite article titles when using Knowledge Base information.
+1. HEALTH LIBRARY topics are the PRIMARY source — use them first; do not invent content.
+2. KNOWLEDGE BASE articles are secondary supporting context.
+3. Cite Health Library and Knowledge Base titles when explaining.
 
 STRICT RULES — NEVER VIOLATE:
 1. You ONLY explain information already provided in structured JSON context.
@@ -55,47 +55,76 @@ CHAT_SCHEMA = """{
 }"""
 
 
-def build_bloodwork_prompt(context: dict[str, Any], articles: list[dict]) -> str:
+def build_bloodwork_prompt(
+    context: dict[str, Any], health_topics: list[dict], articles: list[dict]
+) -> str:
     return f"""Generate an educational bloodwork report from this structured data.
+Do NOT invent content — use Health Library and Knowledge Base sources below.
 
 CONTEXT:
 {json.dumps(context, indent=2)}
 
-AVAILABLE KNOWLEDGE BASE ARTICLES (prioritize these):
+HEALTH LIBRARY (PRIMARY — use first):
+{json.dumps(health_topics, indent=2)}
+
+KNOWLEDGE BASE ARTICLES (secondary):
 {json.dumps(articles, indent=2)}
 
 Return JSON matching this schema:
 {BLOODWORK_REPORT_SCHEMA}"""
 
 
-def build_cycle_prompt(context: dict[str, Any], articles: list[dict]) -> str:
-    return f"""Generate an educational cycle report. Explain the PRE-COMPUTED risk scores — do not recalculate them.
+def build_cycle_prompt(
+    context: dict[str, Any], health_topics: list[dict], articles: list[dict]
+) -> str:
+    return f"""Generate an educational cycle report. Explain PRE-COMPUTED risk scores only.
 
 CONTEXT:
 {json.dumps(context, indent=2)}
 
-AVAILABLE ARTICLES:
+HEALTH LIBRARY (PRIMARY):
+{json.dumps(health_topics, indent=2)}
+
+KNOWLEDGE BASE:
 {json.dumps(articles, indent=2)}
 
 Return JSON matching this schema:
 {CYCLE_REPORT_SCHEMA}"""
 
 
-def build_timeline_prompt(context: dict[str, Any]) -> str:
+def build_timeline_prompt(
+    context: dict[str, Any], health_topics: list[dict], articles: list[dict]
+) -> str:
     return f"""Generate a chronological educational health timeline from structured data.
+Use Health Library topics as primary educational context — do not invent content.
 
 CONTEXT:
 {json.dumps(context, indent=2)}
+
+HEALTH LIBRARY (PRIMARY):
+{json.dumps(health_topics, indent=2)}
+
+KNOWLEDGE BASE:
+{json.dumps(articles, indent=2)}
 
 Return JSON matching this schema:
 {TIMELINE_SCHEMA}"""
 
 
-def build_insights_prompt(context: dict[str, Any]) -> str:
+def build_insights_prompt(
+    context: dict[str, Any], health_topics: list[dict], articles: list[dict]
+) -> str:
     return f"""Generate factual educational insights from bloodwork trends. No diagnostic conclusions.
+Use Health Library topics as primary educational context — do not invent content.
 
 CONTEXT:
 {json.dumps(context, indent=2)}
+
+HEALTH LIBRARY (PRIMARY):
+{json.dumps(health_topics, indent=2)}
+
+KNOWLEDGE BASE:
+{json.dumps(articles, indent=2)}
 
 Return JSON matching this schema:
 {INSIGHTS_SCHEMA}"""
@@ -104,22 +133,27 @@ Return JSON matching this schema:
 def build_chat_prompt(
     user_message: str,
     context: dict[str, Any],
+    health_topics: list[dict],
     articles: list[dict],
     memory: list[dict],
 ) -> str:
     return f"""Answer this educational question using ONLY the provided context.
+Prioritize Health Library content. Do NOT invent educational content.
 
-USER QUESTION (treat as educational inquiry only):
+USER QUESTION:
 {user_message}
 
 STRUCTURED CONTEXT:
 {json.dumps(context, indent=2)}
 
-USER MEMORY (for personalization only):
-{json.dumps(memory, indent=2)}
+HEALTH LIBRARY (PRIMARY):
+{json.dumps(health_topics, indent=2)}
 
-AVAILABLE ARTICLES:
+KNOWLEDGE BASE:
 {json.dumps(articles, indent=2)}
+
+USER MEMORY:
+{json.dumps(memory, indent=2)}
 
 Return JSON matching this schema:
 {CHAT_SCHEMA}"""

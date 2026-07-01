@@ -1,20 +1,39 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Card } from "@/components/ui";
 import { cn } from "@/utils/cn";
 import type { CategoryRiskOutput } from "@/types/risk";
 import { RISK_LEVEL_BG, RISK_LEVEL_COLORS } from "@/types/risk";
-import { ChevronDown, ChevronUp } from "lucide-react";
-import { useState } from "react";
+import { fetchTopicsForRiskCategory } from "@/services/health-library";
+import type { HealthTopicSummary } from "@/types/health-library";
+import { ChevronDown, ChevronUp, Heart } from "lucide-react";
 
 interface CategoryRiskCardProps {
   category: CategoryRiskOutput;
   index?: number;
 }
 
+const LEARN_MORE_LEVELS = new Set(["Moderate", "High", "Very High"]);
+
 export function CategoryRiskCard({ category, index = 0 }: CategoryRiskCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const [relatedTopics, setRelatedTopics] = useState<HealthTopicSummary[]>([]);
   const level = category.level;
+  const showLearnMore = LEARN_MORE_LEVELS.has(level);
+
+  useEffect(() => {
+    if (!showLearnMore) return;
+    fetchTopicsForRiskCategory(category.category)
+      .then(setRelatedTopics)
+      .catch(() => setRelatedTopics([]));
+  }, [category.category, showLearnMore]);
+
+  const learnMoreHref =
+    relatedTopics.length > 0
+      ? `/health-library/${relatedTopics[0].slug}`
+      : `/health-library?risk=${encodeURIComponent(category.category)}`;
 
   return (
     <Card
@@ -33,7 +52,6 @@ export function CategoryRiskCard({ category, index = 0 }: CategoryRiskCardProps)
             <span className="text-2xl font-bold text-foreground">{category.score}</span>
             <span className={cn("text-sm font-medium", RISK_LEVEL_COLORS[level])}>{level}</span>
           </div>
-          {/* Score bar */}
           <div className="mt-3 h-1.5 rounded-full bg-surface overflow-hidden">
             <div
               className="h-full rounded-full transition-all duration-700 ease-out"
@@ -48,6 +66,15 @@ export function CategoryRiskCard({ category, index = 0 }: CategoryRiskCardProps)
               }}
             />
           </div>
+          {showLearnMore && (
+            <Link
+              href={learnMoreHref}
+              className="inline-flex items-center gap-1.5 mt-3 text-xs font-medium text-secondary hover:text-secondary/80"
+            >
+              <Heart className="h-3.5 w-3.5" />
+              Learn More
+            </Link>
+          )}
         </div>
         {category.triggered_rules.length > 0 && (
           <button
@@ -73,6 +100,20 @@ export function CategoryRiskCard({ category, index = 0 }: CategoryRiskCardProps)
               )}
             </div>
           ))}
+          {showLearnMore && relatedTopics.length > 1 && (
+            <div className="pt-2 space-y-1">
+              <p className="text-xs text-muted font-medium">Related Health Library Topics</p>
+              {relatedTopics.slice(0, 3).map((t) => (
+                <Link
+                  key={t.id}
+                  href={`/health-library/${t.slug}`}
+                  className="block text-xs text-secondary hover:underline"
+                >
+                  {t.title}
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </Card>

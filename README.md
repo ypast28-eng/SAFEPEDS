@@ -170,6 +170,23 @@ AI endpoints require `Authorization: Bearer <supabase_access_token>` from the fr
 update public.profiles set is_admin = true where email = 'your-admin@email.com';
 ```
 
+## Phase 8 — Complete
+
+- [x] `health_topics`, `support_options`, `support_details` tables with junction links
+- [x] 26 seeded educational topics across Blood Health, Cardiovascular, Liver, Kidney, Hormones, General
+- [x] Health Library UI — browse by category, search, bookmarks, recently viewed, related articles
+- [x] Topic detail pages with overview, support options, and cross-links to compounds and Knowledge Base
+- [x] Risk Engine "Learn More" links to relevant Health Library topics
+- [x] AI integration — Health Library is primary RAG source; links to KB and scientific references
+- [x] Admin CMS at `/admin/health-library` (requires `profiles.is_admin`)
+
+### Apply Phase 8 migrations
+
+```bash
+# 12. supabase/migrations/20250707000000_health_support_library.sql
+# 13. supabase/migrations/20250707000001_seed_health_topics.sql
+```
+
 ## Getting Started
 
 ### 1. Supabase project
@@ -225,7 +242,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 | `/verify-email` | Post-signup verification instructions |
 | `/auth/callback` | Email/OAuth session exchange |
 
-Protected routes (`/dashboard`, `/cycle-builder`, `/bloodwork`, `/knowledge-base`, `/settings`) redirect unauthenticated users to `/login`.
+Protected routes (`/dashboard`, `/cycle-builder`, `/bloodwork`, `/knowledge-base`, `/health-library`, `/settings`) redirect unauthenticated users to `/login`.
 
 ## License
 

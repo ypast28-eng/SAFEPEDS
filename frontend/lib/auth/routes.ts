@@ -8,6 +8,7 @@ export const PROTECTED_ROUTES = [
   "/ai",
   "/admin",
   "/knowledge-base",
+  "/health-library",
   "/settings",
 ] as const;
 

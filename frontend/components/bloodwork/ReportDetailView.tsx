@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Plus, Download, FileText, Calendar, Building2 } from "lucide-react";
+import { ArrowLeft, Plus, Download, FileText, Calendar, Building2, Heart } from "lucide-react";
 import { Button, Card, Badge } from "@/components/ui";
 import { Table } from "@/components/ui/Table";
 import { fetchReportById, getSignedFileUrl, fetchReportsWithStats } from "@/services/bloodwork";
@@ -157,7 +157,24 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
         ) : (
           <Table
             columns={[
-              { key: "marker", header: "Marker" },
+              {
+                key: "marker",
+                header: "Marker",
+                render: (row) => (
+                  <div className="flex flex-col gap-1">
+                    <span>{row.marker}</span>
+                    {row.status && row.status !== "Normal" && (
+                      <Link
+                        href={`/health-library?marker=${encodeURIComponent(String(row.marker))}`}
+                        className="inline-flex items-center gap-1 text-xs text-secondary hover:underline"
+                      >
+                        <Heart className="h-3 w-3" />
+                        Learn More
+                      </Link>
+                    )}
+                  </div>
+                ),
+              },
               { key: "category", header: "Category", className: "hidden md:table-cell" },
               { key: "result", header: "Result" },
               { key: "unit", header: "Unit", className: "hidden sm:table-cell" },

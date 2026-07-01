@@ -8,6 +8,7 @@ import {
   Brain,
   Lock,
   Layers,
+  Heart,
   type LucideIcon,
 } from "lucide-react";
 
@@ -22,6 +23,7 @@ export const iconMap: Record<string, LucideIcon> = {
   Brain,
   Lock,
   Layers,
+  Heart,
 };
 
 export function getIcon(name: string): LucideIcon {

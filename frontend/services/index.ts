@@ -47,3 +47,17 @@ export {
   adminCreateReference,
   uploadKnowledgeImage,
 } from "./knowledge";
+export {
+  fetchHealthCategories,
+  searchHealthTopics,
+  fetchHealthTopic,
+  fetchTopicsForRiskCategory,
+  fetchBookmarks,
+  toggleBookmark,
+  fetchRecentTopics,
+  recordTopicView,
+  adminListHealthTopics,
+  adminCreateHealthTopic,
+  adminUpdateHealthTopic,
+  adminDeleteHealthTopic,
+} from "./health-library";

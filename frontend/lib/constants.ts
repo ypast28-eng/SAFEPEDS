@@ -63,6 +63,12 @@ export const APP_NAV_ITEMS: NavItem[] = [
     description: "Educational resources and guides",
   },
   {
+    label: "Health Library",
+    href: "/health-library",
+    icon: "Heart",
+    description: "Bloodwork findings and health education",
+  },
+  {
     label: "Settings",
     href: "/settings",
     icon: "Settings",
