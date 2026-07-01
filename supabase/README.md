@@ -9,6 +9,8 @@
 | 3 | `migrations/20250702000001_seed_compounds.sql` | 3 |
 | 4 | `migrations/20250703000000_bloodwork.sql` | 4 |
 | 5 | `migrations/20250703000001_seed_blood_markers.sql` | 4 |
+| 6 | `migrations/20250704000000_risk_engine.sql` | 5 |
+| 7 | `migrations/20250704000001_seed_risk_rules.sql` | 5 |
 
 ### Option A — SQL Editor
 
@@ -63,6 +65,18 @@ Historical values for trend charts (auto-populated via trigger).
 ### Storage: `bloodwork-reports`
 Private bucket for PDF/image pathology reports.
 
+## Phase 5 tables
+
+### `risk_categories`
+Educational risk category definitions (liver, kidney, cardiovascular, etc.).
+
+### `risk_rules`
+Configurable scoring rules — condition JSON, weight, explanation, evidence placeholder.  
+Admins can enable/disable and update without application code changes.
+
+### `risk_assessments`
+Persisted risk calculation history (calculate, compare, what_if).
+
 ## RLS summary
 
 | Table | Access |
@@ -76,6 +90,9 @@ Private bucket for PDF/image pathology reports.
 | `bloodwork_reports` | Owner CRUD |
 | `bloodwork_results` | Owner CRUD via report |
 | `bloodwork_history` | Owner read/insert/delete |
+| `risk_categories` | Authenticated read (active) |
+| `risk_rules` | Authenticated read (enabled) |
+| `risk_assessments` | Owner CRUD |
 
 ## Auth redirect URLs
 

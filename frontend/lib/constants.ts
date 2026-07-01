@@ -33,6 +33,12 @@ export const APP_NAV_ITEMS: NavItem[] = [
     description: "Log and visualize lab results",
   },
   {
+    label: "Risk Dashboard",
+    href: "/risk",
+    icon: "ShieldAlert",
+    description: "Educational risk scores and monitoring",
+  },
+  {
     label: "Knowledge Base",
     href: "/knowledge-base",
     icon: "BookOpen",

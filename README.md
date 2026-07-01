@@ -73,6 +73,48 @@ Or regenerate seed: `node scripts/generate-compound-seed.mjs`
 # 5. supabase/migrations/20250703000001_seed_blood_markers.sql
 ```
 
+## Phase 5 — Complete
+
+- [x] Dedicated Risk Engine service (Python) — separate from UI, database, and AI
+- [x] Modular rule framework with configurable weights, conditions, and explanations
+- [x] 14 risk categories with 0–100 scores and five display levels
+- [x] `risk_categories`, `risk_rules`, and `risk_assessments` tables in Supabase
+- [x] FastAPI endpoints: calculate, compare, what-if, history
+- [x] Risk Dashboard with gauges, category cards, and monitoring placeholders
+- [x] Compare Cycles and What-If analysis UIs
+- [x] Placeholder scoring — rules editable in Supabase without code changes
+
+### Apply Phase 5 migrations
+
+```bash
+# 6. supabase/migrations/20250704000000_risk_engine.sql
+# 7. supabase/migrations/20250704000001_seed_risk_rules.sql
+```
+
+### Run the Risk Engine API
+
+The frontend calls the FastAPI backend for risk calculations. Start both services:
+
+```bash
+# Terminal 1 — backend
+cd backend
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+
+# Terminal 2 — frontend
+cd frontend
+npm run dev
+```
+
+Optional backend env (`backend/.env`) for full rule set and history persistence:
+
+```
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your-service-role-or-anon-key
+```
+
+Without Supabase configured, the engine uses built-in fallback rules.
+
 ## Getting Started
 
 ### 1. Supabase project

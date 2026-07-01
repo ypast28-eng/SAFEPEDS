@@ -21,3 +21,9 @@ export {
   getSignedFileUrl,
   calculateStatus,
 } from "./bloodwork";
+export {
+  calculateRisk,
+  compareCycles,
+  whatIfAnalysis,
+  fetchRiskHistory,
+} from "./risk";
