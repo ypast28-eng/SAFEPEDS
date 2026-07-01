@@ -7,6 +7,8 @@
 | 1 | `migrations/20250701000000_create_profiles.sql` | 2 |
 | 2 | `migrations/20250702000000_compounds_and_cycles.sql` | 3 |
 | 3 | `migrations/20250702000001_seed_compounds.sql` | 3 |
+| 4 | `migrations/20250703000000_bloodwork.sql` | 4 |
+| 5 | `migrations/20250703000001_seed_blood_markers.sql` | 4 |
 
 ### Option A — SQL Editor
 
@@ -44,6 +46,23 @@ User-owned cycle plans (name, goal, dates, notes).
 ### `cycle_compounds`
 Compounds in a cycle with dose, unit, frequency, duration, notes.
 
+## Phase 4 tables
+
+### `blood_markers`
+Reference catalog of lab markers (CBC, liver, lipids, hormones, etc.). Add rows to support new markers without code changes.
+
+### `bloodwork_reports`
+User lab reports with metadata and optional uploaded file path.
+
+### `bloodwork_results`
+Per-marker results with user-supplied reference ranges and status (Low/Normal/High).
+
+### `bloodwork_history`
+Historical values for trend charts (auto-populated via trigger).
+
+### Storage: `bloodwork-reports`
+Private bucket for PDF/image pathology reports.
+
 ## RLS summary
 
 | Table | Access |
@@ -53,6 +72,10 @@ Compounds in a cycle with dose, unit, frequency, duration, notes.
 | `compound_profiles` | Authenticated read |
 | `user_cycles` | Owner CRUD |
 | `cycle_compounds` | Owner CRUD via cycle |
+| `blood_markers` | Authenticated read |
+| `bloodwork_reports` | Owner CRUD |
+| `bloodwork_results` | Owner CRUD via report |
+| `bloodwork_history` | Owner read/insert/delete |
 
 ## Auth redirect URLs
 

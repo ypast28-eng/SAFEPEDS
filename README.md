@@ -57,6 +57,22 @@ Run after Phase 2 migrations:
 
 Or regenerate seed: `node scripts/generate-compound-seed.mjs`
 
+## Phase 4 — Complete
+
+- [x] Bloodwork reports, results, and history tables with RLS
+- [x] `blood_markers` reference catalog (extensible without code changes)
+- [x] Supabase Storage bucket for PDF/image uploads
+- [x] Bloodwork dashboard, manual entry, file upload
+- [x] Report detail view with status (Low/Normal/High from user-supplied ranges)
+- [x] Trend dashboard with 3m / 6m / 12m / all-time filters
+
+### Apply Phase 4 migrations
+
+```bash
+# 4. supabase/migrations/20250703000000_bloodwork.sql
+# 5. supabase/migrations/20250703000001_seed_blood_markers.sql
+```
+
 ## Getting Started
 
 ### 1. Supabase project
