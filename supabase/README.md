@@ -1,11 +1,16 @@
 # Supabase
 
-## Apply migrations
+## Apply migrations (in order)
+
+| # | File | Phase |
+|---|------|-------|
+| 1 | `migrations/20250701000000_create_profiles.sql` | 2 |
+| 2 | `migrations/20250702000000_compounds_and_cycles.sql` | 3 |
+| 3 | `migrations/20250702000001_seed_compounds.sql` | 3 |
 
 ### Option A — SQL Editor
 
-1. Open your Supabase project → **SQL Editor**
-2. Paste and run `migrations/20250701000000_create_profiles.sql`
+Run each file in order in **SQL Editor**.
 
 ### Option B — Supabase CLI
 
@@ -14,20 +19,40 @@ supabase link --project-ref your-project-ref
 supabase db push
 ```
 
-## Profiles table
+### Regenerate compound seed
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | uuid | FK to `auth.users` |
-| `email` | text | User email |
-| `age` | integer | Age (13–120) |
-| `sex` | text | `male`, `female`, `other`, `prefer_not_to_say` |
-| `height` | numeric | Centimeters |
-| `weight` | numeric | Kilograms |
-| `body_fat` | numeric | Body fat % |
-| `training_experience` | text | `beginner`, `intermediate`, `advanced`, `elite` |
+```bash
+node scripts/generate-compound-seed.mjs
+```
 
-A trigger automatically creates a profile row when a user signs up.
+## Phase 3 tables
+
+### `compound_categories`
+Educational grouping for compounds (17 categories).
+
+### `compounds`
+Core compound records — name, type, administration, ester, etc.  
+**Read-only** for authenticated users.
+
+### `compound_profiles`
+Risk scores (0–10 placeholders), monitoring markers, mechanism notes.  
+**Read-only** for authenticated users.
+
+### `user_cycles`
+User-owned cycle plans (name, goal, dates, notes).
+
+### `cycle_compounds`
+Compounds in a cycle with dose, unit, frequency, duration, notes.
+
+## RLS summary
+
+| Table | Access |
+|-------|--------|
+| `compound_categories` | Authenticated read |
+| `compounds` | Authenticated read (active only) |
+| `compound_profiles` | Authenticated read |
+| `user_cycles` | Owner CRUD |
+| `cycle_compounds` | Owner CRUD via cycle |
 
 ## Auth redirect URLs
 

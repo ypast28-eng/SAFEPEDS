@@ -36,6 +36,27 @@ Educational health-monitoring SaaS platform for performance athletes. Track bloo
 - [x] `profiles` table with RLS and auto-create on signup
 - [x] Reusable hooks: `useAuth`, `useUser`, `useProfile`
 
+## Phase 3 — Complete
+
+- [x] Compound knowledge database (categories, compounds, compound_profiles)
+- [x] User cycles & cycle_compounds tables with RLS
+- [x] 86 compounds seeded across 17 categories (via migration)
+- [x] Cycle Builder — search, filter, dose, units, frequency, duration, notes
+- [x] My Cycles — view, edit, delete, duplicate
+- [x] Knowledge Base — database-driven compound browser
+
+### Apply Phase 3 migrations
+
+Run after Phase 2 migrations:
+
+```bash
+# In Supabase SQL Editor, run in order:
+# 1. supabase/migrations/20250702000000_compounds_and_cycles.sql
+# 2. supabase/migrations/20250702000001_seed_compounds.sql
+```
+
+Or regenerate seed: `node scripts/generate-compound-seed.mjs`
+
 ## Getting Started
 
 ### 1. Supabase project

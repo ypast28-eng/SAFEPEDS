@@ -109,3 +109,19 @@ body {
 .glow-orb-gold {
   background: rgba(212, 168, 83, 0.08);
 }
+
+/* Staggered entrance animations */
+@keyframes fade-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-slide-up {
+  animation: fade-slide-up 0.4s ease-out both;
+}

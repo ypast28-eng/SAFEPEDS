@@ -5,3 +5,5 @@ export { Badge } from "./Badge";
 export { Modal } from "./Modal";
 export { Table } from "./Table";
 export { ChartPlaceholder } from "./ChartPlaceholder";
+export { Select } from "./Select";
+export { Textarea } from "./Textarea";

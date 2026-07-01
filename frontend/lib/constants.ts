@@ -21,6 +21,12 @@ export const APP_NAV_ITEMS: NavItem[] = [
     description: "Plan and track compound cycles",
   },
   {
+    label: "My Cycles",
+    href: "/my-cycles",
+    icon: "Layers",
+    description: "View and manage saved cycles",
+  },
+  {
     label: "Bloodwork",
     href: "/bloodwork",
     icon: "Droplets",

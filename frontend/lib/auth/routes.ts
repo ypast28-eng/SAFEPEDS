@@ -2,6 +2,7 @@
 export const PROTECTED_ROUTES = [
   "/dashboard",
   "/cycle-builder",
+  "/my-cycles",
   "/bloodwork",
   "/knowledge-base",
   "/settings",
