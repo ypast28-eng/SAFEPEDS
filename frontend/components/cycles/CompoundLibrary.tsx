@@ -17,7 +17,7 @@ export function CompoundLibrary({ onSelect, selectedIds }: CompoundLibraryProps)
   const { categories, isLoading: categoriesLoading } = useCompoundCategories();
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
-  const { compounds, isLoading, error } = useCompounds({ search, categoryId });
+  const { compounds, isLoading } = useCompounds({ search, categoryId });
 
   return (
     <Card variant="elevated" padding="md" className="h-full flex flex-col">
@@ -69,10 +69,7 @@ export function CompoundLibrary({ onSelect, selectedIds }: CompoundLibraryProps)
         {isLoading && (
           <p className="text-sm text-muted text-center py-8 animate-pulse">Loading compounds…</p>
         )}
-        {!isLoading && error && (
-          <p className="text-sm text-accent text-center py-8" role="alert">{error}</p>
-        )}
-        {!isLoading && !error && compounds.length === 0 && (
+        {!isLoading && compounds.length === 0 && (
           <p className="text-sm text-muted text-center py-8">No compounds found</p>
         )}
         {compounds.map((compound) => {

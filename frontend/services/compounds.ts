@@ -2,141 +2,16 @@ import { isSupabaseEnvConfigured } from "@/lib/supabase/env";
 import { tryCreateClient } from "@/lib/supabase/client";
 import { MOCK_CATEGORIES, MOCK_COMPOUNDS } from "@/lib/mock/compounds";
 import type {
-  Compound,
   CompoundCategory,
   CompoundFilters,
-  CompoundProfile,
   CompoundWithRelations,
 } from "@/types/compounds";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
-const COMPOUND_SELECT_WITH_RELATIONS = `
+const COMPOUND_SELECT = `
   *,
   category:compound_categories (*),
   profile:compound_profiles (*)
 `;
-
-function toCompoundWithRelations(
-  row: Compound & {
-    category?: CompoundCategory | null;
-    profile?: CompoundProfile | null;
-  }
-): CompoundWithRelations {
-  const { category = null, profile = null, ...base } = row;
-  return {
-    ...base,
-    category_id: base.category_id ?? "",
-    category,
-    profile,
-  };
-}
-
-function applyClientFilters(
-  list: CompoundWithRelations[],
-  filters: CompoundFilters
-): CompoundWithRelations[] {
-  let result = list;
-  if (filters.categoryId) {
-    result = result.filter((c) => c.category_id === filters.categoryId);
-  }
-  if (filters.search?.trim()) {
-    const s = filters.search.trim().toLowerCase();
-    result = result.filter((c) => c.name.toLowerCase().includes(s));
-  }
-  return result;
-}
-
-async function enrichCompounds(
-  supabase: SupabaseClient,
-  rows: Compound[]
-): Promise<CompoundWithRelations[]> {
-  if (rows.length === 0) return [];
-
-  const categoryIds = [
-    ...new Set(rows.map((c) => c.category_id).filter((id): id is string => Boolean(id))),
-  ];
-  const compoundIds = rows.map((c) => c.id);
-
-  const categoriesById = new Map<string, CompoundCategory>();
-  if (categoryIds.length > 0) {
-    const { data: categories } = await supabase
-      .from("compound_categories")
-      .select("*")
-      .in("id", categoryIds);
-    for (const cat of (categories ?? []) as CompoundCategory[]) {
-      categoriesById.set(cat.id, cat);
-    }
-  }
-
-  const profilesByCompoundId = new Map<string, CompoundProfile>();
-  const { data: profiles, error: profileError } = await supabase
-    .from("compound_profiles")
-    .select("*")
-    .in("compound_id", compoundIds);
-  if (!profileError) {
-    for (const profile of (profiles ?? []) as CompoundProfile[]) {
-      profilesByCompoundId.set(profile.compound_id, profile);
-    }
-  }
-
-  return rows.map((row) =>
-    toCompoundWithRelations({
-      ...row,
-      category: row.category_id ? (categoriesById.get(row.category_id) ?? null) : null,
-      profile: profilesByCompoundId.get(row.id) ?? null,
-    })
-  );
-}
-
-async function fetchActiveCompounds(
-  supabase: SupabaseClient,
-  filters: CompoundFilters
-): Promise<{ data: CompoundWithRelations[]; error: string | null }> {
-  let query = supabase.from("compounds").select("*").eq("active", true).order("name");
-
-  if (filters.search?.trim()) {
-    query = query.ilike("name", `%${filters.search.trim()}%`);
-  }
-
-  const { data, error } = await query;
-
-  if (error) {
-    return { data: [], error: error.message };
-  }
-
-  const enriched = await enrichCompounds(supabase, (data ?? []) as Compound[]);
-  return { data: applyClientFilters(enriched, filters), error: null };
-}
-
-async function fetchActiveCompoundsWithRelations(
-  supabase: SupabaseClient,
-  filters: CompoundFilters
-): Promise<{ data: CompoundWithRelations[]; error: string | null }> {
-  let query = supabase
-    .from("compounds")
-    .select(COMPOUND_SELECT_WITH_RELATIONS)
-    .eq("active", true)
-    .order("name");
-
-  if (filters.categoryId) {
-    query = query.eq("category_id", filters.categoryId);
-  }
-
-  if (filters.search?.trim()) {
-    query = query.ilike("name", `%${filters.search.trim()}%`);
-  }
-
-  const { data, error } = await query;
-
-  if (error) {
-    return { data: [], error: error.message };
-  }
-
-  return {
-    data: ((data ?? []) as CompoundWithRelations[]).map(toCompoundWithRelations),
-    error: null,
-  };
-}
 
 export async function fetchCompoundCategories(): Promise<{
   data: CompoundCategory[];
@@ -152,25 +27,42 @@ export async function fetchCompoundCategories(): Promise<{
     .select("*")
     .order("name");
 
-  if (error) return { data: [], error: error.message };
-  return { data: (data ?? []) as CompoundCategory[], error: null };
+  if (error) return { data: MOCK_CATEGORIES, error: error.message };
+  return { data: (data ?? MOCK_CATEGORIES) as CompoundCategory[], error: null };
 }
 
 export async function fetchCompounds(
   filters: CompoundFilters = {}
 ): Promise<{ data: CompoundWithRelations[]; error: string | null }> {
   if (!isSupabaseEnvConfigured()) {
-    return { data: applyClientFilters([...MOCK_COMPOUNDS], filters), error: null };
+    let list = [...MOCK_COMPOUNDS];
+    if (filters.categoryId) list = list.filter((c) => c.category_id === filters.categoryId);
+    if (filters.search?.trim()) {
+      const s = filters.search.trim().toLowerCase();
+      list = list.filter((c) => c.name.toLowerCase().includes(s));
+    }
+    return { data: list, error: null };
   }
 
   const supabase = tryCreateClient()!;
+  let query = supabase
+    .from("compounds")
+    .select(COMPOUND_SELECT)
+    .eq("active", true)
+    .order("name");
 
-  const withRelations = await fetchActiveCompoundsWithRelations(supabase, filters);
-  if (!withRelations.error) {
-    return withRelations;
+  if (filters.categoryId) {
+    query = query.eq("category_id", filters.categoryId);
   }
 
-  return fetchActiveCompounds(supabase, filters);
+  if (filters.search?.trim()) {
+    query = query.ilike("name", `%${filters.search.trim()}%`);
+  }
+
+  const { data, error } = await query.limit(100);
+
+  if (error) return { data: MOCK_COMPOUNDS, error: error.message };
+  return { data: (data ?? MOCK_COMPOUNDS) as CompoundWithRelations[], error: null };
 }
 
 export async function fetchCompoundById(
@@ -181,31 +73,12 @@ export async function fetchCompoundById(
   }
 
   const supabase = tryCreateClient()!;
-
   const { data, error } = await supabase
     .from("compounds")
-    .select(COMPOUND_SELECT_WITH_RELATIONS)
+    .select(COMPOUND_SELECT)
     .eq("id", id)
     .maybeSingle();
 
-  if (!error && data) {
-    return { data: toCompoundWithRelations(data as CompoundWithRelations), error: null };
-  }
-
-  const { data: compound, error: compoundError } = await supabase
-    .from("compounds")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (compoundError) {
-    return { data: null, error: compoundError.message };
-  }
-
-  if (!compound) {
-    return { data: null, error: null };
-  }
-
-  const [enriched] = await enrichCompounds(supabase, [compound as Compound]);
-  return { data: enriched ?? null, error: null };
+  if (error) return { data: null, error: error.message };
+  return { data: data as CompoundWithRelations | null, error: null };
 }
