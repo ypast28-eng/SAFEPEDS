@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Activity } from "lucide-react";
-import { Input, Card } from "@/components/ui";
-import { AuthForm } from "@/components/shared/AuthForm";
-import { APP_NAME } from "@/lib/constants";
+import { Card } from "@/components/ui";
+import { SignupForm } from "@/components/auth";
+import { APP_NAME, MEDICAL_DISCLAIMER } from "@/lib/constants";
 
 export const metadata: Metadata = {
   title: "Sign Up",
@@ -27,22 +27,7 @@ export default function SignupPage() {
         </div>
 
         <Card variant="elevated" padding="lg">
-          <AuthForm submitLabel="Create Account">
-            <Input label="Full Name" type="text" placeholder="John Doe" autoComplete="name" />
-            <Input
-              label="Email"
-              type="email"
-              placeholder="you@example.com"
-              autoComplete="email"
-            />
-            <Input
-              label="Password"
-              type="password"
-              placeholder="••••••••"
-              autoComplete="new-password"
-              hint="Minimum 8 characters"
-            />
-          </AuthForm>
+          <SignupForm />
 
           <p className="text-center text-sm text-muted mt-6">
             Already have an account?{" "}
@@ -52,9 +37,7 @@ export default function SignupPage() {
           </p>
         </Card>
 
-        <p className="text-center text-xs text-muted/60 mt-6">
-          By signing up, you agree to our Terms of Service. Auth integration coming in Phase 2.
-        </p>
+        <p className="text-center text-xs text-muted/60 mt-6">{MEDICAL_DISCLAIMER}</p>
       </div>
     </div>
   );

@@ -1,23 +1,59 @@
-/**
- * Auth service placeholder — Supabase Auth integration in Phase 2
- */
+import { createClient } from "@/lib/supabase/client";
+import { config } from "@/lib/config";
+
+function getRedirectUrl(path: string): string {
+  const base = config.app.url.replace(/\/$/, "");
+  return `${base}${path}`;
+}
+
+/** Client-side Supabase auth operations */
 export const authService = {
-  signIn: async (email: string, password: string) => {
-    void email;
-    void password;
-    return { success: false, message: "Auth not yet implemented" };
+  async signInWithPassword(email: string, password: string) {
+    const supabase = createClient();
+    return supabase.auth.signInWithPassword({ email, password });
   },
-  signUp: async (email: string, password: string) => {
-    void email;
-    void password;
-    return { success: false, message: "Auth not yet implemented" };
+
+  async signUp(email: string, password: string) {
+    const supabase = createClient();
+    return supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: getRedirectUrl("/auth/callback"),
+      },
+    });
   },
-  signOut: async () => {
-    // Phase 2: Supabase signOut
-    return { success: true };
+
+  async signOut() {
+    const supabase = createClient();
+    return supabase.auth.signOut();
   },
-  getSession: async () => {
-    // Phase 2: Supabase getSession
-    return null;
+
+  async resetPassword(email: string) {
+    const supabase = createClient();
+    return supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: getRedirectUrl("/reset-password"),
+    });
+  },
+
+  async resendVerificationEmail(email: string) {
+    const supabase = createClient();
+    return supabase.auth.resend({
+      type: "signup",
+      email,
+      options: {
+        emailRedirectTo: getRedirectUrl("/auth/callback"),
+      },
+    });
+  },
+
+  async updatePassword(password: string) {
+    const supabase = createClient();
+    return supabase.auth.updateUser({ password });
+  },
+
+  async getSession() {
+    const supabase = createClient();
+    return supabase.auth.getSession();
   },
 };

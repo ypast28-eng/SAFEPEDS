@@ -12,7 +12,13 @@ import {
 } from "lucide-react";
 import { APP_NAME, APP_NAV_ITEMS } from "@/lib/constants";
 import { getIcon } from "@/components/icons";
+import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/utils/cn";
+
+function getUserInitials(email: string | undefined): string {
+  if (!email) return "?";
+  return email.charAt(0).toUpperCase();
+}
 
 interface SidebarProps {
   isOpen: boolean;
@@ -30,6 +36,8 @@ export function Sidebar({
   onCloseMobile,
 }: SidebarProps) {
   const pathname = usePathname();
+  const { user, signOut } = useAuth();
+  const email = user?.email ?? "";
 
   const sidebarContent = (
     <div className="flex h-full flex-col">
@@ -98,16 +106,20 @@ export function Sidebar({
           )}
         >
           <div className="h-8 w-8 shrink-0 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-xs font-bold text-background">
-            U
+            {getUserInitials(email)}
           </div>
           {isOpen && (
             <div className="flex-1 overflow-hidden">
-              <p className="text-sm font-medium text-foreground truncate">User</p>
-              <p className="text-xs text-muted truncate">user@example.com</p>
+              <p className="text-sm font-medium text-foreground truncate">
+                {email || "Account"}
+              </p>
+              <p className="text-xs text-muted truncate">Signed in</p>
             </div>
           )}
           {isOpen && (
             <button
+              type="button"
+              onClick={() => signOut()}
               className="text-muted hover:text-accent transition-colors"
               aria-label="Sign out"
             >

@@ -19,40 +19,47 @@ Educational health-monitoring SaaS platform for performance athletes. Track bloo
 ```
 /
 ├── frontend/          # Next.js 15 application
-│   ├── app/           # App Router pages & layouts
-│   ├── components/    # UI, layout, marketing components
-│   ├── hooks/         # Custom React hooks
-│   ├── lib/           # Constants, config
-│   ├── services/      # API & auth service placeholders
-│   ├── styles/        # Design tokens
-│   ├── types/         # Shared TypeScript types
-│   └── utils/         # Utility functions
-└── backend/           # FastAPI application (scaffold)
+├── backend/           # FastAPI application (scaffold)
+└── supabase/          # SQL migrations & Supabase config
+    └── migrations/
 ```
 
 ## Phase 1 — Complete
 
-- [x] Project scaffolding & folder structure
-- [x] Dark theme with premium bodybuilding + healthcare aesthetic
-- [x] Landing page (Hero, Features, Pricing, FAQ, Footer)
-- [x] Responsive navigation bar
-- [x] Placeholder app pages (Dashboard, Cycle Builder, Bloodwork, Knowledge Base, Settings)
-- [x] Responsive sidebar for authenticated users
-- [x] Reusable UI components (Button, Card, Input, Table, Modal, Badge, Charts)
+- [x] Project scaffolding, dark theme, landing page, UI component library
+- [x] Placeholder app pages with responsive sidebar
+
+## Phase 2 — Complete
+
+- [x] Supabase Auth (login, signup, forgot password, email verification)
+- [x] Protected routes via Next.js middleware
+- [x] `profiles` table with RLS and auto-create on signup
+- [x] Reusable hooks: `useAuth`, `useUser`, `useProfile`
 
 ## Getting Started
 
-### Frontend
+### 1. Supabase project
+
+1. Create a project at [supabase.com](https://supabase.com)
+2. Run the migration in `supabase/migrations/20250701000000_create_profiles.sql` via the **SQL Editor** or Supabase CLI
+3. Under **Authentication → URL Configuration**, add redirect URLs:
+   - `http://localhost:3000/auth/callback`
+   - `http://localhost:3000/reset-password`
+4. Enable **Email confirmations** under Authentication → Providers → Email (recommended)
+
+### 2. Frontend
 
 ```bash
 cd frontend
+cp .env.example .env.local
+# Fill in NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY
 npm install
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
 
-### Backend (placeholder)
+### 3. Backend (optional)
 
 ```bash
 cd backend
@@ -60,18 +67,31 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-API available at [http://localhost:8000](http://localhost:8000).
-
 ## Environment Variables
 
-Copy `frontend/.env.example` to `frontend/.env.local` when ready:
+`frontend/.env.local`:
 
 ```
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 NEXT_PUBLIC_API_URL=http://localhost:8000
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 ```
+
+**Never commit real keys.** Use `.env.local` locally and CI/CD secrets in production.
+
+## Auth Routes
+
+| Route | Purpose |
+|-------|---------|
+| `/login` | Sign in |
+| `/signup` | Create account |
+| `/forgot-password` | Request password reset email |
+| `/reset-password` | Set new password (from email link) |
+| `/verify-email` | Post-signup verification instructions |
+| `/auth/callback` | Email/OAuth session exchange |
+
+Protected routes (`/dashboard`, `/cycle-builder`, `/bloodwork`, `/knowledge-base`, `/settings`) redirect unauthenticated users to `/login`.
 
 ## License
 
