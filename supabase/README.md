@@ -17,7 +17,20 @@
 | 11 | `migrations/20250706000001_seed_knowledge_base.sql` | 7 |
 | 12 | `migrations/20250707000000_health_support_library.sql` | 8 |
 | 13 | `migrations/20250707000001_seed_health_topics.sql` | 8 |
-| 14 | `migrations/20250708000000_pedsafe_complete_schema.sql` | PEDSAFE (greenfield) |
+
+### PEDSAFE (greenfield — separate table names)
+
+See **`supabase/PEDSAFE.md`** for Dashboard + GitHub deploy steps (no CLI, no copy/paste).
+
+| # | File |
+|---|------|
+| P1 | `migrations/20250708100000_pedsafe_foundation.sql` |
+| P2 | `migrations/20250708100001_pedsafe_profiles.sql` |
+| P3 | `migrations/20250708100002_pedsafe_compounds.sql` |
+| P4 | `migrations/20250708100003_pedsafe_cycles.sql` |
+| P5 | `migrations/20250708100004_pedsafe_bloodwork.sql` |
+| P6 | `migrations/20250708100005_pedsafe_notes.sql` |
+| P7 | `migrations/20250708100006_pedsafe_seed_compounds.sql` |
 
 ### Option A — Supabase Dashboard + GitHub (no manual SQL copy)
 
@@ -37,11 +50,11 @@ Use this to deploy migrations from the repo without pasting SQL.
 
 6. You should see pending migrations from `supabase/migrations/`. Click **Deploy** (or **Run migration**) on each pending file, or **Deploy all** if offered.
 
-7. Wait for success. Confirm tables in **Table Editor**: `profiles`, `compounds`, `cycles`, `bloodwork`, `lab_results`, `notes`.
+7. Wait for success. Confirm tables in **Table Editor**.
 
-> **Note:** Migrations `1–13` power the full SAFEPEDS app (`user_cycles`, `bloodwork_reports`, …).  
-> Migration `14` (`pedsafe_complete_schema`) is for **greenfield PEDSAFE** table names only.  
-> On a **new empty project**, run either the full chain `1–13` **or** only `14` — not both if you want one schema model.
+> **PEDSAFE-only?** See `supabase/PEDSAFE.md` — deploy migrations `20250708100000`–`20250708100006` only.
+
+> **SAFEPEDS app?** Deploy migrations `1–13` only. Do not mix with PEDSAFE on the same database.
 
 ### Option B — Supabase CLI (no manual SQL copy)
 
