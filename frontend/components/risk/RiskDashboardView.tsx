@@ -14,6 +14,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { Button, Card, Badge, Select } from "@/components/ui";
 import { RiskGauge } from "./RiskGauge";
 import { CategoryRiskCard } from "./CategoryRiskCard";
+import { AiCycleReportCard } from "@/components/ai";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useUserCycles } from "@/hooks/useUserCycles";
@@ -25,7 +26,13 @@ import {
   cycleToRiskInput,
   profileToRiskInput,
 } from "@/lib/risk/transform";
+import {
+  cycleToAiContext,
+  profileToAiContext,
+  riskToAiContext,
+} from "@/lib/ai/transform";
 import type { RiskAssessmentResult, RiskHistoryEntry } from "@/types/risk";
+import type { UserCycleWithCompounds } from "@/types/cycles";
 
 export function RiskDashboardView() {
   const { user } = useAuth();
@@ -33,6 +40,7 @@ export function RiskDashboardView() {
   const { cycles, isLoading: cyclesLoading } = useUserCycles();
   const [selectedCycleId, setSelectedCycleId] = useState<string>("");
   const [assessment, setAssessment] = useState<RiskAssessmentResult | null>(null);
+  const [cycleDetail, setCycleDetail] = useState<UserCycleWithCompounds | null>(null);
   const [history, setHistory] = useState<RiskHistoryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +58,7 @@ export function RiskDashboardView() {
         setError("Cycle not found");
         return;
       }
+      setCycleDetail(cycle);
       const result = await calculateRisk(
         {
           user_profile: profileToRiskInput(profile),
@@ -224,6 +233,18 @@ export function RiskDashboardView() {
                 ))}
             </div>
           </div>
+
+          {cycleDetail && assessment && (
+            <Card variant="elevated" padding="lg">
+              <AiCycleReportCard
+                request={{
+                  profile: profileToAiContext(profile),
+                  cycle: cycleToAiContext(cycleDetail),
+                  risk_assessment: riskToAiContext(assessment),
+                }}
+              />
+            </Card>
+          )}
 
           {history.length > 0 && (
             <Card variant="bordered" padding="md">

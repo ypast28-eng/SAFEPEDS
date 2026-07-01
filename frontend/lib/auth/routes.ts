@@ -5,6 +5,7 @@ export const PROTECTED_ROUTES = [
   "/my-cycles",
   "/bloodwork",
   "/risk",
+  "/ai",
   "/knowledge-base",
   "/settings",
 ] as const;

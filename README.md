@@ -115,6 +115,37 @@ SUPABASE_KEY=your-service-role-or-anon-key
 
 Without Supabase configured, the engine uses built-in fallback rules.
 
+## Phase 6 — Complete
+
+- [x] Dedicated AI Service — all requests through FastAPI with structured JSON only
+- [x] OpenAI integration with retry, rate limiting, token tracking, and audit logging
+- [x] Prompt templates — no raw prompts from frontend; injection protection
+- [x] AI Bloodwork Report on report detail page
+- [x] AI Cycle Report on Risk Dashboard (explains rule-based scores only)
+- [x] AI Health Timeline, Insights, and secure Chat interfaces
+- [x] Educational articles and scientific references in Supabase
+- [x] AI memory and audit log tables with RLS
+- [x] Deterministic fallback when `OPENAI_API_KEY` is not configured
+
+### Apply Phase 6 migrations
+
+```bash
+# 8. supabase/migrations/20250705000000_ai_intelligence.sql
+# 9. supabase/migrations/20250705000001_seed_educational_content.sql
+```
+
+### AI backend configuration
+
+Add to `backend/.env`:
+
+```
+OPENAI_API_KEY=sk-...
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your-service-role-key
+```
+
+AI endpoints require `Authorization: Bearer <supabase_access_token>` from the frontend session.
+
 ## Getting Started
 
 ### 1. Supabase project

@@ -27,3 +27,11 @@ export {
   whatIfAnalysis,
   fetchRiskHistory,
 } from "./risk";
+export {
+  generateBloodworkReport,
+  generateCycleReport,
+  generateTimeline,
+  generateInsights,
+  sendChatMessage,
+  fetchChatHistory,
+} from "./ai";

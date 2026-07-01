@@ -5,8 +5,11 @@ import Link from "next/link";
 import { ArrowLeft, Plus, Download, FileText, Calendar, Building2 } from "lucide-react";
 import { Button, Card, Badge } from "@/components/ui";
 import { Table } from "@/components/ui/Table";
-import { fetchReportById, getSignedFileUrl } from "@/services/bloodwork";
+import { fetchReportById, getSignedFileUrl, fetchReportsWithStats } from "@/services/bloodwork";
 import { StatusBadge } from "./StatusBadge";
+import { AiBloodworkReportCard } from "@/components/ai";
+import { useProfile } from "@/hooks/useProfile";
+import { profileToAiContext, reportToAiContext } from "@/lib/ai/transform";
 import { formatLabDate, formatRefRange } from "@/utils/bloodwork";
 import type { BloodworkReportWithResults } from "@/types/bloodwork";
 
@@ -15,7 +18,11 @@ interface ReportDetailViewProps {
 }
 
 export function ReportDetailView({ reportId }: ReportDetailViewProps) {
+  const { profile } = useProfile();
   const [report, setReport] = useState<BloodworkReportWithResults | null>(null);
+  const [historicalTrends, setHistoricalTrends] = useState<
+    { marker_name: string; collection_date: string; result_value: number; unit: string; status?: string | null }[]
+  >([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
@@ -30,6 +37,19 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
         const { url } = await getSignedFileUrl(data.uploaded_file_url);
         setFileUrl(url);
       }
+      const { data: stats } = await fetchReportsWithStats();
+      const trends = [stats.latestReport, ...stats.previousReports]
+        .filter((r): r is BloodworkReportWithResults => r != null && r.id !== reportId)
+        .flatMap((r) =>
+          r.bloodwork_results.map((br) => ({
+            marker_name: br.marker_name,
+            collection_date: r.collection_date,
+            result_value: Number(br.result_value),
+            unit: br.unit,
+            status: br.status,
+          }))
+        );
+      setHistoricalTrends(trends);
       setIsLoading(false);
     }
     load();
@@ -154,6 +174,16 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
           />
         )}
       </div>
+
+      {report.bloodwork_results.length > 0 && (
+        <AiBloodworkReportCard
+          request={{
+            profile: profileToAiContext(profile),
+            report: reportToAiContext(report),
+            historical_trends: historicalTrends,
+          }}
+        />
+      )}
 
       <p className="text-xs text-muted/70 text-center">
         Status is calculated from your supplied reference ranges only. Not medical advice.

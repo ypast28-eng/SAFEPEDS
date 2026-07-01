@@ -11,6 +11,8 @@
 | 5 | `migrations/20250703000001_seed_blood_markers.sql` | 4 |
 | 6 | `migrations/20250704000000_risk_engine.sql` | 5 |
 | 7 | `migrations/20250704000001_seed_risk_rules.sql` | 5 |
+| 8 | `migrations/20250705000000_ai_intelligence.sql` | 6 |
+| 9 | `migrations/20250705000001_seed_educational_content.sql` | 6 |
 
 ### Option A — SQL Editor
 
@@ -77,6 +79,26 @@ Admins can enable/disable and update without application code changes.
 ### `risk_assessments`
 Persisted risk calculation history (calculate, compare, what_if).
 
+## Phase 6 tables
+
+### `educational_articles`
+Curated educational content for AI citations and knowledge base expansion.
+
+### `educational_references`
+Scientific citations linked to articles or compounds.
+
+### `ai_memory`
+Per-user context for personalized educational explanations.
+
+### `ai_audit_logs`
+Audit trail for every AI request (compliance and security).
+
+### `ai_reports`
+Cached AI-generated reports (bloodwork, cycle, timeline, insights).
+
+### `ai_chat_messages`
+Persisted chat history per user.
+
 ## RLS summary
 
 | Table | Access |
@@ -93,6 +115,12 @@ Persisted risk calculation history (calculate, compare, what_if).
 | `risk_categories` | Authenticated read (active) |
 | `risk_rules` | Authenticated read (enabled) |
 | `risk_assessments` | Owner CRUD |
+| `educational_articles` | Authenticated read (published) |
+| `educational_references` | Authenticated read |
+| `ai_memory` | Owner CRUD |
+| `ai_audit_logs` | Owner read |
+| `ai_reports` | Owner read |
+| `ai_chat_messages` | Owner CRUD |
 
 ## Auth redirect URLs
 

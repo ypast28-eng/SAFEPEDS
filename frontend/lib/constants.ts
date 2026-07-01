@@ -39,6 +39,24 @@ export const APP_NAV_ITEMS: NavItem[] = [
     description: "Educational risk scores and monitoring",
   },
   {
+    label: "AI Chat",
+    href: "/ai/chat",
+    icon: "Brain",
+    description: "Educational health assistant",
+  },
+  {
+    label: "AI Insights",
+    href: "/ai/insights",
+    icon: "Brain",
+    description: "Trend-based educational observations",
+  },
+  {
+    label: "AI Timeline",
+    href: "/ai/timeline",
+    icon: "Brain",
+    description: "Chronological health summary",
+  },
+  {
     label: "Knowledge Base",
     href: "/knowledge-base",
     icon: "BookOpen",
