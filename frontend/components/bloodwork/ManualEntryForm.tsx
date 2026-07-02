@@ -57,10 +57,12 @@ export function ManualEntryForm({
   existingReportId,
   initialExtracted,
   reviewNotice,
+  onSaved,
 }: {
   existingReportId?: string;
   initialExtracted?: ExtractedBloodworkMarker[];
   reviewNotice?: string | null;
+  onSaved?: () => void;
 } = {}) {
   const router = useRouter();
   const { user } = useAuth();
@@ -150,6 +152,10 @@ export function ManualEntryForm({
       setIsSaving(false);
       if (appendError) {
         setError(appendError);
+        return;
+      }
+      if (onSaved) {
+        onSaved();
         return;
       }
       router.push(`/bloodwork/reports/${existingReportId}`);
