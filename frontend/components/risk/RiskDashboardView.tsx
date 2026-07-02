@@ -290,6 +290,7 @@ export function RiskDashboardView() {
 
           <Card variant="elevated" padding="lg">
             <AiCycleReportCard
+              cycleId={cycleDetail.id}
               request={{
                 profile: profileToAiContext(profile),
                 cycle: cycleToAiContext(cycleDetail),
