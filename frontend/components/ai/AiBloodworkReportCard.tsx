@@ -1,39 +1,61 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import { Brain, Loader2, RefreshCw, Sparkles } from "lucide-react";
-import { Button, Badge } from "@/components/ui";
+import { useCallback, useEffect, useState } from "react";
+import { Brain, Loader2, RefreshCw, Sparkles, AlertCircle } from "lucide-react";
+import { Button, Badge, Card } from "@/components/ui";
 import { AiDisclaimer } from "./AiDisclaimer";
 import { AiExpandableSection } from "./AiExpandableSection";
 import { AiSourceList } from "./AiSourceList";
-import { AiUnavailableNotice, assertAiAvailable } from "./AiUnavailableNotice";
-import { useAuth } from "@/hooks/useAuth";
-import { generateBloodworkReport } from "@/services/ai";
+import { fetchAiReportConfig } from "@/services/ai-cycle-report";
+import { generateBloodworkReportViaApi } from "@/services/ai-bloodwork-report";
 import type { AiBloodworkReportRequest, AiBloodworkReportResult } from "@/types/ai";
 
 interface AiBloodworkReportCardProps {
   request: AiBloodworkReportRequest;
+  reportId?: string;
 }
 
-export function AiBloodworkReportCard({ request }: AiBloodworkReportCardProps) {
-  const { session } = useAuth();
+export function AiBloodworkReportCard({ request, reportId }: AiBloodworkReportCardProps) {
   const [report, setReport] = useState<AiBloodworkReportResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [setupMessage, setSetupMessage] = useState<string | null>(null);
+  const [aiConfigured, setAiConfigured] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetchAiReportConfig().then(({ configured, setupInstructions }) => {
+      setAiConfigured(configured);
+      setSetupMessage(configured ? null : setupInstructions);
+    });
+  }, []);
 
   const generate = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+
     try {
-      assertAiAvailable();
-      const result = await generateBloodworkReport(request, session?.access_token);
-      setReport(result);
+      const outcome = reportId
+        ? await generateBloodworkReportViaApi({ reportId })
+        : await generateBloodworkReportViaApi({ request });
+
+      if (outcome.setupRequired) {
+        setSetupMessage(outcome.setupMessage);
+        setReport(null);
+        return;
+      }
+
+      if (outcome.error || !outcome.data) {
+        setError(outcome.error ?? "Failed to generate report");
+        return;
+      }
+
+      setReport(outcome.data);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to generate report");
     } finally {
       setIsLoading(false);
     }
-  }, [request, session?.access_token]);
+  }, [request, reportId]);
 
   return (
     <div className="space-y-4">
@@ -43,22 +65,41 @@ export function AiBloodworkReportCard({ request }: AiBloodworkReportCardProps) {
           <h2 className="text-base font-semibold text-foreground">AI Educational Report</h2>
           <Badge variant="warning" size="sm">Educational Only</Badge>
         </div>
-        <Button variant="outline" size="sm" onClick={generate} isLoading={isLoading}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={generate}
+          isLoading={isLoading}
+          disabled={aiConfigured === false}
+        >
           {report ? <RefreshCw className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
           {report ? "Regenerate" : "Generate Report"}
         </Button>
       </div>
 
-      <AiUnavailableNotice />
+      {aiConfigured === false && setupMessage && (
+        <Card variant="bordered" padding="md" className="border-secondary/30 bg-secondary/5">
+          <div className="flex items-start gap-3">
+            <Brain className="h-5 w-5 text-secondary shrink-0" />
+            <p className="text-sm text-muted whitespace-pre-line">{setupMessage}</p>
+          </div>
+        </Card>
+      )}
 
       {error && (
-        <p className="text-sm text-accent" role="alert">{error}</p>
+        <div
+          role="alert"
+          className="rounded-lg border border-accent/30 bg-accent/10 px-4 py-3 text-sm text-accent flex items-start gap-2"
+        >
+          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <p>{error}</p>
+        </div>
       )}
 
       {isLoading && !report && (
         <div className="flex items-center justify-center gap-2 py-12 text-muted animate-pulse">
           <Loader2 className="h-5 w-5 animate-spin" />
-          Generating educational analysis…
+          Generating educational analysis from your saved bloodwork…
         </div>
       )}
 

@@ -465,6 +465,7 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
 
       {report.bloodwork_results.length > 0 && (
         <AiBloodworkReportCard
+          reportId={report.id}
           request={{
             profile: profileToAiContext(profile),
             report: reportToAiContext(report),
