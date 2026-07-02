@@ -16,8 +16,11 @@ on conflict (id) do update set
 alter table public.bloodwork_reports
   add column if not exists file_name text,
   add column if not exists file_type text,
-  add column if not exists status text not null default 'uploaded'
-    check (status in ('uploaded', 'pending_review', 'complete'));
+  add column if not exists file_size integer,
+  add column if not exists file_path text,
+  add column if not exists file_url text,
+  add column if not exists uploaded_file_url text,
+  add column if not exists status text default 'uploaded';
 
 drop policy if exists "Users can upload own bloodwork files" on storage.objects;
 create policy "Users can upload own bloodwork files"

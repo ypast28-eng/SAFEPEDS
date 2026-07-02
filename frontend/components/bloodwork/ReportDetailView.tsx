@@ -11,7 +11,7 @@ import { AiBloodworkReportCard } from "@/components/ai";
 import { useProfile } from "@/hooks/useProfile";
 import { profileToAiContext, reportToAiContext } from "@/lib/ai/transform";
 import { formatLabDate, formatRefRange } from "@/utils/bloodwork";
-import { formatReportStatus } from "@/lib/bloodwork/upload";
+import { formatReportStatus, getReportStoragePath } from "@/lib/bloodwork/upload";
 import type { BloodworkReportWithResults } from "@/types/bloodwork";
 
 interface ReportDetailViewProps {
@@ -34,8 +34,9 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
       const { data, error: err } = await fetchReportById(reportId);
       setReport(data);
       setError(err);
-      if (data?.uploaded_file_url) {
-        const { url } = await getSignedFileUrl(data.uploaded_file_url);
+      const storagePath = data ? getReportStoragePath(data) : null;
+      if (storagePath) {
+        const { url } = await getSignedFileUrl(storagePath);
         setFileUrl(url);
       }
       const { data: stats } = await fetchReportsWithStats();
@@ -132,7 +133,7 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
             {(report.out_of_range_count ?? 0) > 0 && (
               <Badge variant="warning">{report.out_of_range_count} out of range</Badge>
             )}
-            {report.uploaded_file_url && (
+            {getReportStoragePath(report) && (
               <Badge variant="info">
                 <FileText className="h-3 w-3 mr-1" />
                 {report.file_name ?? "File attached"}

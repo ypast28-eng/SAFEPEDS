@@ -21,6 +21,7 @@ import {
 } from "@/services/bloodwork";
 import {
   formatReportStatus,
+  getReportStoragePath,
   isImageMimeType,
   validateBloodworkUploadFile,
 } from "@/lib/bloodwork/upload";
@@ -120,7 +121,8 @@ export function UploadReportForm() {
       }
 
       setUploadedReport(data);
-      const { url, error: urlError } = await getSignedFileUrl(data.uploaded_file_url ?? "");
+      const storagePath = getReportStoragePath(data) ?? "";
+      const { url, error: urlError } = await getSignedFileUrl(storagePath);
       if (urlError) {
         setError(`Report saved but preview failed: ${urlError}`);
       }

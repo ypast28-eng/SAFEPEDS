@@ -30,13 +30,18 @@ function normalizeReport<T extends BloodworkReport & { bloodwork_results?: { len
   row: T
 ): T {
   const resultsCount = row.bloodwork_results?.length ?? 0;
+  const filePath = row.file_path ?? row.uploaded_file_url ?? null;
   return {
     ...row,
     file_name: row.file_name ?? null,
     file_type: row.file_type ?? null,
+    file_size: row.file_size ?? null,
+    file_path: filePath,
+    file_url: row.file_url ?? null,
+    uploaded_file_url: filePath,
     status:
       row.status ??
-      (resultsCount > 0 ? "complete" : row.uploaded_file_url ? "uploaded" : "uploaded"),
+      (resultsCount > 0 ? "complete" : filePath ? "uploaded" : "uploaded"),
   };
 }
 
@@ -209,12 +214,17 @@ export async function uploadReportFile(
 
   if (uploadError) return { url: null, error: uploadError.message };
 
+  const { data: signed } = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600);
+
   const { error: updateError } = await supabase
     .from("bloodwork_reports")
     .update({
+      file_path: path,
       uploaded_file_url: path,
       file_name: file.name,
       file_type: file.type,
+      file_size: file.size,
+      file_url: signed?.signedUrl ?? null,
     })
     .eq("id", reportId);
 
@@ -255,7 +265,14 @@ export async function createReportWithFile(
     return { data: null, error: uploadError };
   }
 
-  return { data: report as BloodworkReport, error: null };
+  const { data: updated, error: fetchError } = await supabase
+    .from("bloodwork_reports")
+    .select("*")
+    .eq("id", report.id)
+    .single();
+
+  if (fetchError) return { data: report as BloodworkReport, error: null };
+  return { data: normalizeReport(updated as BloodworkReport), error: null };
 }
 
 export async function updateReportStatus(

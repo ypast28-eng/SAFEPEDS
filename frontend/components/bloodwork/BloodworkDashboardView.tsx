@@ -21,6 +21,7 @@ import { StatusBadge } from "./StatusBadge";
 import { formatLabDate } from "@/utils/bloodwork";
 import { useState } from "react";
 import { cn } from "@/utils/cn";
+import { getReportStoragePath } from "@/lib/bloodwork/upload";
 
 export function BloodworkDashboardView() {
   const router = useRouter();
@@ -144,7 +145,7 @@ export function BloodworkDashboardView() {
                     {latestReport.report_name}
                   </h3>
                   <Badge variant="primary">Latest</Badge>
-                  {latestReport.uploaded_file_url && (
+                  {getReportStoragePath(latestReport) && (
                     <Badge variant="info" size="sm">
                       <Upload className="h-3 w-3 mr-1" />
                       File attached
