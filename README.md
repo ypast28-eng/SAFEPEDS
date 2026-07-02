@@ -1,4 +1,4 @@
-# PED Health AI
+# PEDSAFE
 
 Educational health-monitoring SaaS platform for performance athletes. Track bloodwork, understand compound risks, and receive AI-powered educational insights.
 

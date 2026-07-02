@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    app_name: str = "PED Health AI API"
+    app_name: str = "PEDSAFE API"
     debug: bool = True
     api_prefix: str = "/api/v1"
 

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Menu, X, Activity } from "lucide-react";
 import { Button } from "@/components/ui";
-import { APP_NAME, MARKETING_NAV_LINKS } from "@/lib/constants";
+import { APP_NAME, APP_BRAND_MARK, MARKETING_NAV_LINKS } from "@/lib/constants";
 import { cn } from "@/utils/cn";
 
 export function Navbar() {
@@ -19,8 +19,8 @@ export function Navbar() {
             <Activity className="h-4 w-4 text-primary" />
           </div>
           <span className="text-base font-bold tracking-tight">
-            <span className="text-foreground">{APP_NAME.split(" ")[0]}</span>{" "}
-            <span className="text-primary">{APP_NAME.split(" ").slice(1).join(" ")}</span>
+            <span className="text-foreground">{APP_BRAND_MARK.prefix}</span>
+            <span className="text-primary">{APP_BRAND_MARK.suffix}</span>
           </span>
         </Link>
 

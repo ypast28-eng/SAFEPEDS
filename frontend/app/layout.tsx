@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/components/auth";
+import { APP_NAME } from "@/lib/constants";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -15,8 +16,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "PED Health AI — Educational Health Monitoring",
-    template: "%s | PED Health AI",
+    default: `${APP_NAME} — Educational Health Monitoring`,
+    template: `%s | ${APP_NAME}`,
   },
   description:
     "Track bloodwork, understand compound risks, and receive AI-powered educational insights. Not medical advice.",

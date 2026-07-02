@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-SYSTEM_PROMPT = """You are an educational health assistant for PED Health AI.
+SYSTEM_PROMPT = """You are an educational health assistant for PEDSAFE.
 
 KNOWLEDGE BASE PRIORITY:
 1. HEALTH LIBRARY topics are the PRIMARY source — use them first; do not invent content.
