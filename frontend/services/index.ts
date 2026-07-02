@@ -17,6 +17,7 @@ export {
   uploadReportFile,
   updateReportStatus,
   appendResultsToReport,
+  updateBloodworkReport,
   deleteReport,
   fetchHistoryForMarker,
   getSignedFileUrl,

@@ -13,10 +13,12 @@ import {
   Sparkles,
   Loader2,
   AlertCircle,
+  Pencil,
 } from "lucide-react";
 import { Button, Card, Badge } from "@/components/ui";
 import { Table } from "@/components/ui/Table";
 import { ManualEntryForm } from "./ManualEntryForm";
+import { ReportEditForm } from "./ReportEditForm";
 import {
   extractMarkersFromReport,
   fetchReportById,
@@ -50,6 +52,8 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
   const [extractNotice, setExtractNotice] = useState<string | null>(null);
   const [extractedMarkers, setExtractedMarkers] = useState<ExtractedBloodworkMarker[] | null>(null);
   const [showReview, setShowReview] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
 
   const loadReport = useCallback(async () => {
     setIsLoading(true);
@@ -204,6 +208,41 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
     );
   }
 
+  if (isEditing) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <Link href="/bloodwork">
+            <Button variant="ghost" size="sm">
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Button>
+          </Link>
+          <div className="flex gap-2">
+            {fileUrl && (
+              <a href={fileUrl} target="_blank" rel="noopener noreferrer">
+                <Button variant="outline" size="sm">
+                  <Download className="h-4 w-4" />
+                  View File
+                </Button>
+              </a>
+            )}
+          </div>
+        </div>
+
+        <ReportEditForm
+          report={report}
+          onCancel={() => setIsEditing(false)}
+          onSaved={() => {
+            setIsEditing(false);
+            setSaveNotice("Report updated successfully.");
+            void loadReport();
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -214,6 +253,18 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
           </Button>
         </Link>
         <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setSaveNotice(null);
+              setIsEditing(true);
+            }}
+          >
+            <Pencil className="h-4 w-4" />
+            Edit
+          </Button>
           {canExtract && (
             <Button
               type="button"
@@ -242,6 +293,15 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
           )}
         </div>
       </div>
+
+      {saveNotice && (
+        <div
+          role="status"
+          className="rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-foreground"
+        >
+          {saveNotice}
+        </div>
+      )}
 
       <Card variant="elevated" padding="lg">
         <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
