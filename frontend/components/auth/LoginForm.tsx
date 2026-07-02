@@ -6,7 +6,9 @@ import { useRouter } from "next/navigation";
 import { Input, Button } from "@/components/ui";
 import { AuthForm } from "@/components/shared/AuthForm";
 import { useAuthRedirectPath } from "@/components/auth/AuthProvider";
+import { useAuth } from "@/hooks/useAuth";
 import { authService } from "@/services/auth";
+import { redirectAfterAuth } from "@/lib/auth/redirect";
 import { isSupabaseEnvConfigured } from "@/lib/supabase/env";
 import { AlertTriangle } from "lucide-react";
 
@@ -16,6 +18,7 @@ interface LoginFormProps {
 
 export function LoginForm({ initialError = null }: LoginFormProps) {
   const router = useRouter();
+  const { refreshSession } = useAuth();
   const redirectPath = useAuthRedirectPath();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(initialError);
@@ -30,38 +33,40 @@ export function LoginForm({ initialError = null }: LoginFormProps) {
     setError(null);
     setIsLoading(true);
 
-    const formData = new FormData(e.currentTarget);
-    const email = String(formData.get("email") ?? "").trim();
-    const password = String(formData.get("password") ?? "");
+    try {
+      const formData = new FormData(e.currentTarget);
+      const email = String(formData.get("email") ?? "").trim();
+      const password = String(formData.get("password") ?? "");
 
-    if (!email || !password) {
-      setError("Please enter your email and password.");
-      setIsLoading(false);
-      return;
-    }
+      if (!email || !password) {
+        setError("Please enter your email and password.");
+        return;
+      }
 
-    const { data, error: signInError } = await authService.signInWithPassword(
-      email,
-      password
-    );
+      const { data, error: signInError } = await authService.signInWithPassword(
+        email,
+        password
+      );
 
-    if (signInError) {
-      if (signInError.message.toLowerCase().includes("email not confirmed")) {
+      if (signInError) {
+        if (signInError.message.toLowerCase().includes("email not confirmed")) {
+          router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+          return;
+        }
+        setError(signInError.message);
+        return;
+      }
+
+      if (data.user && !data.user.email_confirmed_at) {
         router.push(`/verify-email?email=${encodeURIComponent(email)}`);
         return;
       }
-      setError(signInError.message);
+
+      await refreshSession();
+      redirectAfterAuth(redirectPath);
+    } finally {
       setIsLoading(false);
-      return;
     }
-
-    if (data.user && !data.user.email_confirmed_at) {
-      router.push(`/verify-email?email=${encodeURIComponent(email)}`);
-      return;
-    }
-
-    router.push(redirectPath);
-    router.refresh();
   }
 
   return (

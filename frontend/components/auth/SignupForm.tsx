@@ -4,12 +4,15 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui";
 import { AuthForm } from "@/components/shared/AuthForm";
+import { useAuth } from "@/hooks/useAuth";
 import { authService } from "@/services/auth";
+import { redirectAfterAuth } from "@/lib/auth/redirect";
 
 const MIN_PASSWORD_LENGTH = 8;
 
 export function SignupForm() {
   const router = useRouter();
+  const { refreshSession } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,45 +21,44 @@ export function SignupForm() {
     setError(null);
     setIsLoading(true);
 
-    const formData = new FormData(e.currentTarget);
-    const email = String(formData.get("email") ?? "").trim();
-    const password = String(formData.get("password") ?? "");
-    const confirmPassword = String(formData.get("confirmPassword") ?? "");
+    try {
+      const formData = new FormData(e.currentTarget);
+      const email = String(formData.get("email") ?? "").trim();
+      const password = String(formData.get("password") ?? "");
+      const confirmPassword = String(formData.get("confirmPassword") ?? "");
 
-    if (!email || !password) {
-      setError("Please fill in all required fields.");
+      if (!email || !password) {
+        setError("Please fill in all required fields.");
+        return;
+      }
+
+      if (password.length < MIN_PASSWORD_LENGTH) {
+        setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        setError("Passwords do not match.");
+        return;
+      }
+
+      const { data, error: signUpError } = await authService.signUp(email, password);
+
+      if (signUpError) {
+        setError(signUpError.message);
+        return;
+      }
+
+      if (data.user && !data.session) {
+        router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+        return;
+      }
+
+      await refreshSession();
+      redirectAfterAuth("/dashboard");
+    } finally {
       setIsLoading(false);
-      return;
     }
-
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
-      setIsLoading(false);
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
-      setIsLoading(false);
-      return;
-    }
-
-    const { data, error: signUpError } = await authService.signUp(email, password);
-
-    if (signUpError) {
-      setError(signUpError.message);
-      setIsLoading(false);
-      return;
-    }
-
-    // Email confirmation required — no session until verified
-    if (data.user && !data.session) {
-      router.push(`/verify-email?email=${encodeURIComponent(email)}`);
-      return;
-    }
-
-    router.push("/dashboard");
-    router.refresh();
   }
 
   return (

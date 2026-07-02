@@ -25,15 +25,17 @@ export function VerifyEmailPanel({ email }: VerifyEmailPanelProps) {
     setError(null);
     setMessage(null);
 
-    const { error: resendError } = await authService.resendVerificationEmail(email);
+    try {
+      const { error: resendError } = await authService.resendVerificationEmail(email);
 
-    if (resendError) {
-      setError(resendError.message);
-    } else {
-      setMessage("Verification email sent. Please check your inbox.");
+      if (resendError) {
+        setError(resendError.message);
+      } else {
+        setMessage("Verification email sent. Please check your inbox.");
+      }
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   }
 
   return (

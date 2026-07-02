@@ -71,11 +71,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event: string, nextSession: Session | null) => {
+    } = supabase.auth.onAuthStateChange((event: string, nextSession: Session | null) => {
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
       setIsLoading(false);
-      router.refresh();
+      if (event === "SIGNED_OUT" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+        router.refresh();
+      }
     });
 
     return () => subscription.unsubscribe();

@@ -17,27 +17,28 @@ export function ForgotPasswordForm() {
     setSuccess(null);
     setIsLoading(true);
 
-    const formData = new FormData(e.currentTarget);
-    const email = String(formData.get("email") ?? "").trim();
+    try {
+      const formData = new FormData(e.currentTarget);
+      const email = String(formData.get("email") ?? "").trim();
 
-    if (!email) {
-      setError("Please enter your email address.");
+      if (!email) {
+        setError("Please enter your email address.");
+        return;
+      }
+
+      const { error: resetError } = await authService.resetPassword(email);
+
+      if (resetError) {
+        setError(resetError.message);
+        return;
+      }
+
+      setSuccess(
+        "If an account exists for that email, you will receive a password reset link shortly."
+      );
+    } finally {
       setIsLoading(false);
-      return;
     }
-
-    const { error: resetError } = await authService.resetPassword(email);
-
-    if (resetError) {
-      setError(resetError.message);
-      setIsLoading(false);
-      return;
-    }
-
-    setSuccess(
-      "If an account exists for that email, you will receive a password reset link shortly."
-    );
-    setIsLoading(false);
   }
 
   return (
