@@ -81,6 +81,20 @@ export interface BloodworkResultInput {
   reference_high: number | null;
 }
 
+/** Marker returned from AI extraction API (pre-save review) */
+export interface ExtractedBloodworkMarker extends BloodworkResultInput {
+  marker_id: string | null;
+  raw_name: string;
+  matched: boolean;
+}
+
+export interface BloodworkExtractionResult {
+  markers: ExtractedBloodworkMarker[];
+  warnings: string[];
+  extractedCount: number;
+  matchedCount: number;
+}
+
 export interface CreateReportInput {
   report_name: string;
   lab_name?: string;

@@ -10,14 +10,17 @@ import {
   Sparkles,
   ExternalLink,
   CheckCircle2,
+  AlertCircle,
+  Loader2,
 } from "lucide-react";
 import { Button, Card, Input, Textarea, Badge } from "@/components/ui";
 import { ManualEntryForm } from "./ManualEntryForm";
 import { useAuth } from "@/hooks/useAuth";
 import {
   createReportWithFile,
+  extractMarkersFromReport,
+  fetchExtractionConfig,
   getSignedFileUrl,
-  updateReportStatus,
 } from "@/services/bloodwork";
 import {
   formatReportStatus,
@@ -26,10 +29,10 @@ import {
   validateBloodworkUploadFile,
 } from "@/lib/bloodwork/upload";
 import { BLOODWORK_UPLOAD_ACCEPT } from "@/types/bloodwork";
-import type { BloodworkReport } from "@/types/bloodwork";
+import type { BloodworkReport, ExtractedBloodworkMarker } from "@/types/bloodwork";
 import { cn } from "@/utils/cn";
 
-type UploadStep = "form" | "uploaded" | "manual";
+type UploadStep = "form" | "uploaded" | "review" | "manual";
 
 export function UploadReportForm() {
   const router = useRouter();
@@ -46,11 +49,15 @@ export function UploadReportForm() {
   const [uploadedReport, setUploadedReport] = useState<BloodworkReport | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
+  const [extractedMarkers, setExtractedMarkers] = useState<ExtractedBloodworkMarker[]>([]);
+  const [extractionWarnings, setExtractionWarnings] = useState<string[]>([]);
 
   const [isUploading, setIsUploading] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [extractNotice, setExtractNotice] = useState<string | null>(null);
+  const [extractionConfigured, setExtractionConfigured] = useState<boolean | null>(null);
+  const [setupInstructions, setSetupInstructions] = useState<string | null>(null);
 
   useEffect(() => {
     if (!file || !isImageMimeType(file.type)) {
@@ -61,6 +68,14 @@ export function UploadReportForm() {
     setLocalPreviewUrl(url);
     return () => URL.revokeObjectURL(url);
   }, [file]);
+
+  useEffect(() => {
+    if (step !== "uploaded") return;
+    fetchExtractionConfig().then(({ configured, setupInstructions: instructions }) => {
+      setExtractionConfigured(configured);
+      setSetupInstructions(instructions);
+    });
+  }, [step]);
 
   const onFileChange = useCallback((next: File | null) => {
     setError(null);
@@ -137,25 +152,91 @@ export function UploadReportForm() {
     if (!uploadedReport) return;
     setError(null);
     setExtractNotice(null);
+    setExtractionWarnings([]);
     setIsExtracting(true);
 
     try {
-      const { error: statusError } = await updateReportStatus(
-        uploadedReport.id,
-        "pending_review"
-      );
-      if (statusError) {
-        setError(statusError);
+      const outcome = await extractMarkersFromReport(uploadedReport.id);
+
+      if (outcome.setupRequired) {
+        setExtractNotice(outcome.setupMessage);
+        setStep("manual");
         return;
       }
 
-      setExtractNotice(
-        "Automatic extraction is not available yet. Enter marker values manually from your uploaded report."
+      if (outcome.error || !outcome.data) {
+        setError(outcome.error ?? "Extraction failed. Try again or enter markers manually.");
+        return;
+      }
+
+      if (outcome.data.markers.length === 0) {
+        setError("No markers were found in this file. Enter values manually.");
+        return;
+      }
+
+      setExtractedMarkers(outcome.data.markers);
+      setExtractionWarnings(outcome.data.warnings);
+      setUploadedReport((prev) =>
+        prev ? { ...prev, status: "pending_review" } : prev
       );
-      setStep("manual");
+      setStep("review");
     } finally {
       setIsExtracting(false);
     }
+  }
+
+  function openManualEntry(notice?: string) {
+    setExtractNotice(notice ?? null);
+    setStep("manual");
+  }
+
+  if (step === "review" && uploadedReport) {
+    const reviewNotice = [
+      `Extracted ${extractedMarkers.length} marker(s) from your uploaded report. Review and edit values before saving.`,
+      ...extractionWarnings,
+    ].join("\n\n");
+
+    return (
+      <div className="space-y-6">
+        <Card variant="bordered" padding="md" className="border-primary/20 bg-primary/5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-foreground">Review extracted markers</p>
+              <p className="text-sm text-muted mt-1">
+                Confirm each value matches your lab report. Unmatched markers can be mapped using
+                the dropdown.
+              </p>
+              {uploadedReport.file_name && (
+                <p className="text-xs text-muted mt-2">File: {uploadedReport.file_name}</p>
+              )}
+            </div>
+            <div className="flex gap-2 shrink-0">
+              {previewUrl && (
+                <a href={previewUrl} target="_blank" rel="noopener noreferrer">
+                  <Button type="button" variant="outline" size="sm">
+                    <ExternalLink className="h-4 w-4" />
+                    View file
+                  </Button>
+                </a>
+              )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => openManualEntry("Enter marker values manually.")}
+              >
+                Manual entry
+              </Button>
+            </div>
+          </div>
+        </Card>
+        <ManualEntryForm
+          existingReportId={uploadedReport.id}
+          initialExtracted={extractedMarkers}
+          reviewNotice={reviewNotice}
+        />
+      </div>
+    );
   }
 
   if (step === "manual" && uploadedReport) {
@@ -165,7 +246,7 @@ export function UploadReportForm() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <p className="text-sm font-medium text-foreground">Manual review</p>
-              <p className="text-sm text-muted mt-1">
+              <p className="text-sm text-muted mt-1 whitespace-pre-line">
                 {extractNotice ??
                   "Enter the marker values shown on your uploaded report."}
               </p>
@@ -254,12 +335,48 @@ export function UploadReportForm() {
             )}
           </div>
 
+          {isExtracting && (
+            <div
+              role="status"
+              className="mt-4 flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-foreground"
+            >
+              <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />
+              <span>
+                Analyzing your lab report with AI… This may take 15–30 seconds for PDFs and
+                images.
+              </span>
+            </div>
+          )}
+
           {error && (
             <div
               role="alert"
               className="mt-4 rounded-lg border border-accent/30 bg-accent/10 px-4 py-3 text-sm text-accent"
             >
-              {error}
+              <div className="flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <div>
+                  <p>{error}</p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="mt-2 px-0 h-auto text-accent"
+                    onClick={() => openManualEntry()}
+                  >
+                    Enter markers manually instead
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {extractionConfigured === false && setupInstructions && !isExtracting && (
+            <div
+              role="note"
+              className="mt-4 rounded-lg border border-border/60 bg-surface/50 px-4 py-3 text-sm text-muted whitespace-pre-line"
+            >
+              {setupInstructions}
             </div>
           )}
 
@@ -268,6 +385,7 @@ export function UploadReportForm() {
               type="button"
               onClick={handleExtractMarkers}
               isLoading={isExtracting}
+              disabled={isExtracting}
               className="sm:flex-1"
             >
               <Sparkles className="h-4 w-4" />
@@ -276,15 +394,25 @@ export function UploadReportForm() {
             <Button
               type="button"
               variant="outline"
+              onClick={() => openManualEntry()}
+              disabled={isExtracting}
+            >
+              Enter manually
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
               onClick={() => router.push(`/bloodwork/reports/${uploadedReport.id}`)}
+              disabled={isExtracting}
             >
               View report details
             </Button>
           </div>
 
           <p className="text-xs text-muted mt-4">
-            Automatic OCR is not enabled yet. Extract markers opens a manual entry screen so you
-            can type values from your lab report.
+            {extractionConfigured
+              ? "Extract markers uses AI to read your PDF or image and pre-fill results for review before saving."
+              : "Configure OPENAI_API_KEY on the server to enable automatic extraction, or enter markers manually."}
           </p>
         </Card>
       </div>

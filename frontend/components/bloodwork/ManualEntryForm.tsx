@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Plus, Trash2, Save } from "lucide-react";
@@ -8,7 +8,7 @@ import { Button, Card, Input, Select, Textarea } from "@/components/ui";
 import { useBloodMarkers } from "@/hooks/useBloodMarkers";
 import { useAuth } from "@/hooks/useAuth";
 import { createReportWithResults, appendResultsToReport } from "@/services/bloodwork";
-import type { BloodworkResultInput } from "@/types/bloodwork";
+import type { BloodworkResultInput, ExtractedBloodworkMarker } from "@/types/bloodwork";
 
 interface ResultRow {
   localId: string;
@@ -28,7 +28,40 @@ const EMPTY_ROW = (): ResultRow => ({
   reference_high: "",
 });
 
-export function ManualEntryForm({ existingReportId }: { existingReportId?: string } = {}) {
+function rowsFromExtracted(
+  extracted: ExtractedBloodworkMarker[],
+  markers: { id: string; name: string; default_unit: string | null; default_reference_low: number | null; default_reference_high: number | null }[]
+): ResultRow[] {
+  return extracted.map((item) => {
+    const marker =
+      (item.marker_id ? markers.find((m) => m.id === item.marker_id) : undefined) ??
+      markers.find((m) => m.name === item.marker_name);
+    return {
+      localId: crypto.randomUUID(),
+      marker_id: marker?.id ?? "",
+      result_value: String(item.result_value),
+      unit: item.unit || marker?.default_unit || "",
+      reference_low:
+        item.reference_low != null
+          ? String(item.reference_low)
+          : marker?.default_reference_low?.toString() ?? "",
+      reference_high:
+        item.reference_high != null
+          ? String(item.reference_high)
+          : marker?.default_reference_high?.toString() ?? "",
+    };
+  });
+}
+
+export function ManualEntryForm({
+  existingReportId,
+  initialExtracted,
+  reviewNotice,
+}: {
+  existingReportId?: string;
+  initialExtracted?: ExtractedBloodworkMarker[];
+  reviewNotice?: string | null;
+} = {}) {
   const router = useRouter();
   const { user } = useAuth();
   const { markers, isLoading: markersLoading } = useBloodMarkers();
@@ -41,6 +74,13 @@ export function ManualEntryForm({ existingReportId }: { existingReportId?: strin
   const [rows, setRows] = useState<ResultRow[]>([EMPTY_ROW()]);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [initialized, setInitialized] = useState(false);
+
+  useEffect(() => {
+    if (initialized || !initialExtracted?.length || markersLoading) return;
+    setRows(rowsFromExtracted(initialExtracted, markers));
+    setInitialized(true);
+  }, [initialExtracted, markers, markersLoading, initialized]);
 
   const markerOptions = markers.map((m) => ({
     label: `${m.name} (${m.category})`,
@@ -137,6 +177,11 @@ export function ManualEntryForm({ existingReportId }: { existingReportId?: strin
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {reviewNotice && (
+        <Card variant="bordered" padding="md" className="border-primary/20 bg-primary/5">
+          <p className="text-sm text-muted whitespace-pre-line">{reviewNotice}</p>
+        </Card>
+      )}
       {!existingReportId && (
         <Card variant="elevated" padding="lg">
           <h3 className="text-base font-semibold text-foreground mb-4">Report Details</h3>
@@ -268,7 +313,7 @@ export function ManualEntryForm({ existingReportId }: { existingReportId?: strin
         </Link>
         <Button type="submit" isLoading={isSaving} className="sm:ml-auto">
           <Save className="h-4 w-4" />
-          Save Report
+          {existingReportId && initialExtracted?.length ? "Save extracted markers" : "Save Report"}
         </Button>
       </div>
     </form>

@@ -13,12 +13,14 @@ import {
 import type {
   BloodMarker,
   BloodworkDashboardStats,
+  BloodworkExtractionResult,
   BloodworkHistoryPoint,
   BloodworkReport,
   BloodworkReportStatus,
   BloodworkReportWithResults,
   BloodworkResultInput,
   CreateReportInput,
+  ExtractedBloodworkMarker,
   TrendTimeRange,
 } from "@/types/bloodwork";
 
@@ -376,4 +378,89 @@ export async function getSignedFileUrl(
     .createSignedUrl(filePath, 3600);
   if (error) return { url: null, error: error.message };
   return { url: data.signedUrl, error: null };
+}
+
+export type ExtractMarkersOutcome =
+  | { data: BloodworkExtractionResult; error: null; setupRequired: false }
+  | { data: null; error: string; setupRequired: false }
+  | { data: null; error: null; setupRequired: true; setupMessage: string };
+
+/** Call server API to extract markers from an uploaded report file (OpenAI vision/OCR). */
+export async function extractMarkersFromReport(
+  reportId: string
+): Promise<ExtractMarkersOutcome> {
+  try {
+    const res = await fetch("/api/bloodwork/extract", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reportId }),
+    });
+
+    const json = (await res.json()) as {
+      code?: string;
+      message?: string;
+      error?: string;
+      markers?: ExtractedBloodworkMarker[];
+      warnings?: string[];
+      extractedCount?: number;
+      matchedCount?: number;
+    };
+
+    if (res.status === 503 && json.code === "setup_required") {
+      return {
+        data: null,
+        error: null,
+        setupRequired: true,
+        setupMessage: json.message ?? "OPENAI_API_KEY is not configured.",
+      };
+    }
+
+    if (!res.ok) {
+      return {
+        data: null,
+        error: json.error ?? "Extraction failed",
+        setupRequired: false,
+      };
+    }
+
+    return {
+      data: {
+        markers: json.markers ?? [],
+        warnings: json.warnings ?? [],
+        extractedCount: json.extractedCount ?? json.markers?.length ?? 0,
+        matchedCount: json.matchedCount ?? 0,
+      },
+      error: null,
+      setupRequired: false,
+    };
+  } catch {
+    return {
+      data: null,
+      error: "Could not reach extraction service. Check your connection and try again.",
+      setupRequired: false,
+    };
+  }
+}
+
+/** Check whether server-side extraction is configured (OPENAI_API_KEY). */
+export async function fetchExtractionConfig(): Promise<{
+  configured: boolean;
+  setupInstructions: string | null;
+}> {
+  try {
+    const res = await fetch("/api/bloodwork/extract");
+    if (!res.ok) {
+      return { configured: false, setupInstructions: null };
+    }
+    const json = (await res.json()) as {
+      configured?: boolean;
+      setupInstructions?: string | null;
+    };
+    return {
+      configured: Boolean(json.configured),
+      setupInstructions: json.setupInstructions ?? null,
+    };
+  } catch {
+    return { configured: false, setupInstructions: null };
+  }
 }
