@@ -16,7 +16,7 @@ values
     'HDL Cholesterol: Why It Is Monitored',
     'bloodwork',
     'Educational context on HDL as a commonly tracked lipid marker.',
-    'High-density lipoprotein (HDL) cholesterol is often called "good" cholesterol in educational materials because it helps transport cholesterol from tissues back to the liver. HDL levels can be influenced by genetics, diet, exercise, and other factors. In performance health monitoring, HDL is frequently tracked alongside other lipids. Trends over time may be more informative than a single value. This is educational information only — not a diagnosis or treatment recommendation.',
+    'High-density lipoprotein (HDL) cholesterol is often called good cholesterol in educational materials because it helps transport cholesterol from tissues back to the liver. HDL levels can be influenced by genetics, diet, exercise, and other factors. In performance health monitoring, HDL is frequently tracked alongside other lipids. Trends over time may be more informative than a single value. This is educational information only — not a diagnosis or treatment recommendation.',
     array['hdl', 'lipids', 'cholesterol', 'bloodwork'],
     2
   ),
@@ -52,14 +52,23 @@ on conflict (slug) do nothing;
 insert into public.educational_references (article_id, title, url, citation_text, evidence_level, display_order)
 select a.id, 'NIH MedlinePlus — Liver Function Tests', 'https://medlineplus.gov/lab-tests/liver-function-tests/', 'MedlinePlus. Liver Function Tests. U.S. National Library of Medicine.', 'educational', 1
 from public.educational_articles a where a.slug = 'understanding-liver-enzymes'
-on conflict do nothing;
+  and not exists (
+    select 1 from public.educational_references r
+    where r.article_id = a.id and r.title = 'NIH MedlinePlus — Liver Function Tests'
+  );
 
 insert into public.educational_references (article_id, title, url, citation_text, evidence_level, display_order)
 select a.id, 'NIH MedlinePlus — HDL Test', 'https://medlineplus.gov/lab-tests/hdl-cholesterol-test/', 'MedlinePlus. HDL Cholesterol Test. U.S. National Library of Medicine.', 'educational', 1
 from public.educational_articles a where a.slug = 'hdl-cholesterol-monitoring'
-on conflict do nothing;
+  and not exists (
+    select 1 from public.educational_references r
+    where r.article_id = a.id and r.title = 'NIH MedlinePlus — HDL Test'
+  );
 
 insert into public.educational_references (article_id, title, url, citation_text, evidence_level, display_order)
 select a.id, 'NIH MedlinePlus — Hematocrit Test', 'https://medlineplus.gov/lab-tests/hematocrit-test/', 'MedlinePlus. Hematocrit Test. U.S. National Library of Medicine.', 'educational', 1
 from public.educational_articles a where a.slug = 'hematocrit-education'
-on conflict do nothing;
+  and not exists (
+    select 1 from public.educational_references r
+    where r.article_id = a.id and r.title = 'NIH MedlinePlus — Hematocrit Test'
+  );
