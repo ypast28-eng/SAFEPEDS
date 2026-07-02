@@ -79,6 +79,21 @@ export interface BloodworkResultInput {
   unit: string;
   reference_low: number | null;
   reference_high: number | null;
+  status?: BloodworkStatus | null;
+}
+
+/** Editable marker row — existing results include `id` */
+export interface EditableBloodworkResultInput extends BloodworkResultInput {
+  id?: string;
+}
+
+export interface UpdateBloodworkReportInput {
+  report_name: string;
+  lab_name?: string | null;
+  collection_date: string;
+  notes?: string | null;
+  results: EditableBloodworkResultInput[];
+  deleted_result_ids?: string[];
 }
 
 /** Marker returned from AI extraction API (pre-save review) */

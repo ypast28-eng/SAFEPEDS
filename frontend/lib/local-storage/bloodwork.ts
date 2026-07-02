@@ -162,6 +162,73 @@ export function localDeleteReport(id: string): void {
   saveReports(loadReports().filter((r) => r.id !== id));
 }
 
+export function localUpdateReportWithResults(
+  reportId: string,
+  input: import("@/types/bloodwork").UpdateBloodworkReportInput
+): { error: string | null } {
+  const reports = loadReports();
+  const idx = reports.findIndex((r) => r.id === reportId);
+  if (idx < 0) return { error: "Report not found" };
+
+  const ts = nowIso();
+  const deleted = new Set(input.deleted_result_ids ?? []);
+  const kept = reports[idx].bloodwork_results.filter((r) => !deleted.has(r.id));
+
+  const updatedExisting = kept.map((existing) => {
+    const patch = input.results.find((r) => r.id === existing.id);
+    if (!patch) return existing;
+    const status =
+      patch.status !== undefined
+        ? patch.status
+        : calculateStatus(patch.result_value, patch.reference_low, patch.reference_high);
+    return {
+      ...existing,
+      marker_name: patch.marker_name,
+      category: patch.category,
+      result_value: patch.result_value,
+      unit: patch.unit,
+      reference_low: patch.reference_low,
+      reference_high: patch.reference_high,
+      status,
+    };
+  });
+
+  const newResults = input.results
+    .filter((r) => !r.id)
+    .map((r) => ({
+      id: crypto.randomUUID(),
+      report_id: reportId,
+      marker_name: r.marker_name,
+      category: r.category,
+      result_value: r.result_value,
+      unit: r.unit,
+      reference_low: r.reference_low,
+      reference_high: r.reference_high,
+      status:
+        r.status !== undefined
+          ? r.status
+          : calculateStatus(r.result_value, r.reference_low, r.reference_high),
+      created_at: ts,
+    }));
+
+  const report: BloodworkReportWithResults = enrich({
+    ...reports[idx],
+    report_name: input.report_name.trim(),
+    lab_name: input.lab_name?.trim() || null,
+    collection_date: input.collection_date,
+    notes: input.notes?.trim() || null,
+    updated_at: ts,
+    status: input.results.length > 0 || updatedExisting.length > 0 ? "complete" : reports[idx].status,
+    bloodwork_results: [...updatedExisting, ...newResults].sort((a, b) =>
+      a.marker_name.localeCompare(b.marker_name)
+    ),
+  });
+
+  reports[idx] = report;
+  saveReports(reports);
+  return { error: null };
+}
+
 export function localFetchHistoryForMarker(
   markerName: string,
   range: TrendTimeRange

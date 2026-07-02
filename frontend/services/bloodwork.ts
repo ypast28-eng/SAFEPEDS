@@ -9,6 +9,7 @@ import {
   localFetchHistoryForMarker,
   localFetchReportById,
   localFetchReportsWithStats,
+  localUpdateReportWithResults,
 } from "@/lib/local-storage/bloodwork";
 import type {
   BloodMarker,
@@ -22,6 +23,7 @@ import type {
   CreateReportInput,
   ExtractedBloodworkMarker,
   TrendTimeRange,
+  UpdateBloodworkReportInput,
 } from "@/types/bloodwork";
 
 export { calculateStatus } from "@/lib/bloodwork/status";
@@ -326,13 +328,98 @@ export async function appendResultsToReport(
     unit: r.unit,
     reference_low: r.reference_low,
     reference_high: r.reference_high,
-    status: calculateStatus(r.result_value, r.reference_low, r.reference_high),
+    status:
+      r.status !== undefined
+        ? r.status
+        : calculateStatus(r.result_value, r.reference_low, r.reference_high),
   }));
 
   const { error } = await supabase.from("bloodwork_results").insert(rows);
   if (error) return { error: error.message };
 
   await supabase.from("bloodwork_reports").update({ status: "complete" }).eq("id", reportId);
+  return { error: null };
+}
+
+export async function updateBloodworkReport(
+  reportId: string,
+  input: UpdateBloodworkReportInput
+): Promise<{ error: string | null }> {
+  if (!input.report_name.trim()) {
+    return { error: "Report name is required." };
+  }
+  if (!input.collection_date) {
+    return { error: "Collection date is required." };
+  }
+
+  if (!isSupabaseEnvConfigured()) {
+    return localUpdateReportWithResults(reportId, input);
+  }
+
+  const supabase = tryCreateClient()!;
+
+  const { error: reportError } = await supabase
+    .from("bloodwork_reports")
+    .update({
+      report_name: input.report_name.trim(),
+      lab_name: input.lab_name?.trim() || null,
+      collection_date: input.collection_date,
+      notes: input.notes?.trim() || null,
+      status: input.results.length > 0 ? "complete" : undefined,
+    })
+    .eq("id", reportId);
+
+  if (reportError) return { error: reportError.message };
+
+  const deletedIds = input.deleted_result_ids ?? [];
+  if (deletedIds.length > 0) {
+    const { error: deleteError } = await supabase
+      .from("bloodwork_results")
+      .delete()
+      .in("id", deletedIds)
+      .eq("report_id", reportId);
+
+    if (deleteError) return { error: deleteError.message };
+  }
+
+  for (const result of input.results) {
+    const status =
+      result.status !== undefined
+        ? result.status
+        : calculateStatus(result.result_value, result.reference_low, result.reference_high);
+
+    if (result.id) {
+      const { error: updateError } = await supabase
+        .from("bloodwork_results")
+        .update({
+          marker_name: result.marker_name,
+          category: result.category,
+          result_value: result.result_value,
+          unit: result.unit,
+          reference_low: result.reference_low,
+          reference_high: result.reference_high,
+          status,
+        })
+        .eq("id", result.id)
+        .eq("report_id", reportId);
+
+      if (updateError) return { error: updateError.message };
+    } else {
+      const { error: insertError } = await supabase.from("bloodwork_results").insert({
+        report_id: reportId,
+        marker_name: result.marker_name,
+        category: result.category,
+        result_value: result.result_value,
+        unit: result.unit,
+        reference_low: result.reference_low,
+        reference_high: result.reference_high,
+        status,
+      });
+
+      if (insertError) return { error: insertError.message };
+    }
+  }
+
   return { error: null };
 }
 
