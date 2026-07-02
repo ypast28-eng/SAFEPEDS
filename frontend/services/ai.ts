@@ -61,20 +61,28 @@ export async function generateInsights(
 
 export async function sendChatMessage(
   body: AiChatRequest,
-  accessToken: string | null | undefined
+  _accessToken?: string | null | undefined
 ): Promise<AiChatResponse> {
-  return authenticatedFetch<AiChatResponse>(`${BASE}/chat`, {
-    method: "POST",
-    body,
-    accessToken,
-  });
+  const { sendChatMessageViaApi } = await import("@/services/ai-chat");
+  const outcome = await sendChatMessageViaApi(body);
+  if (outcome.setupRequired) {
+    throw new Error(outcome.setupMessage);
+  }
+  if (outcome.billingError) {
+    throw new Error(outcome.billingMessage);
+  }
+  if (outcome.error || !outcome.data) {
+    throw new Error(outcome.error ?? "Chat failed");
+  }
+  return outcome.data;
 }
 
 export async function fetchChatHistory(
-  accessToken: string | null | undefined,
+  _accessToken?: string | null | undefined,
   limit = 20
 ): Promise<ChatHistoryMessage[]> {
-  return authenticatedFetch<ChatHistoryMessage[]>(`${BASE}/chat/history?limit=${limit}`, {
-    accessToken,
-  });
+  const { fetchChatHistoryViaApi } = await import("@/services/ai-chat");
+  const outcome = await fetchChatHistoryViaApi(limit);
+  if (outcome.error) return [];
+  return outcome.data ?? [];
 }
