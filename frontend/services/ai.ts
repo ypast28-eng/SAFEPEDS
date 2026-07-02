@@ -8,8 +8,6 @@ import type {
   AiCycleReportResult,
   AiInsightsRequest,
   AiInsightsResult,
-  AiTimelineRequest,
-  AiTimelineResult,
   ChatHistoryMessage,
 } from "@/types/ai";
 
@@ -31,17 +29,6 @@ export async function generateCycleReport(
   accessToken: string | null | undefined
 ): Promise<AiCycleReportResult> {
   return authenticatedFetch<AiCycleReportResult>(`${BASE}/cycle-report`, {
-    method: "POST",
-    body,
-    accessToken,
-  });
-}
-
-export async function generateTimeline(
-  body: AiTimelineRequest,
-  accessToken: string | null | undefined
-): Promise<AiTimelineResult> {
-  return authenticatedFetch<AiTimelineResult>(`${BASE}/timeline`, {
     method: "POST",
     body,
     accessToken,

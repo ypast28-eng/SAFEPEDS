@@ -1,10 +1,6 @@
-import type { Metadata } from "next";
-import { AiTimelineView } from "@/components/ai";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "AI Health Timeline",
-};
-
+/** AI Timeline is disabled — send visitors to AI Chat. */
 export default function AiTimelinePage() {
-  return <AiTimelineView />;
+  redirect("/ai/chat");
 }
