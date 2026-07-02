@@ -3,10 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Trash2, Save, X, CheckCircle2 } from "lucide-react";
 import { Button, Card, Input, Select, Textarea } from "@/components/ui";
+import { BloodworkPhaseSelector } from "./BloodworkPhaseSelector";
 import { useBloodMarkers } from "@/hooks/useBloodMarkers";
 import { updateBloodworkReport } from "@/services/bloodwork";
 import { calculateStatus } from "@/lib/bloodwork/status";
 import type {
+  BloodworkPhaseInput,
   BloodworkReportWithResults,
   BloodworkStatus,
   EditableBloodworkResultInput,
@@ -81,6 +83,9 @@ export function ReportEditForm({ report, onCancel, onSaved }: ReportEditFormProp
   const [labName, setLabName] = useState(report.lab_name ?? "");
   const [collectionDate, setCollectionDate] = useState(report.collection_date);
   const [notes, setNotes] = useState(report.notes ?? "");
+  const [phase, setPhase] = useState<BloodworkPhaseInput | null>(
+    report.phase === "cruise" || report.phase === "blast" ? report.phase : null
+  );
   const [rows, setRows] = useState<EditResultRow[]>(() => rowsFromReport(report, []));
   const [deletedResultIds, setDeletedResultIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -139,6 +144,10 @@ export function ReportEditForm({ report, onCancel, onSaved }: ReportEditFormProp
       setError("Collection date is required.");
       return;
     }
+    if (!phase) {
+      setError("Please select whether this bloodwork was taken during cruise or blast.");
+      return;
+    }
 
     const results: EditableBloodworkResultInput[] = [];
 
@@ -180,6 +189,7 @@ export function ReportEditForm({ report, onCancel, onSaved }: ReportEditFormProp
       lab_name: labName || null,
       collection_date: collectionDate,
       notes: notes || null,
+      phase,
       results,
       deleted_result_ids: deletedResultIds,
     });
@@ -199,7 +209,9 @@ export function ReportEditForm({ report, onCancel, onSaved }: ReportEditFormProp
     <form onSubmit={handleSubmit} className="space-y-6">
       <Card variant="elevated" padding="lg">
         <h2 className="text-base font-semibold text-foreground mb-4">Edit Report Details</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-6">
+          <BloodworkPhaseSelector value={phase} onChange={setPhase} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Input
             label="Report Name"
             value={reportName}
@@ -227,6 +239,7 @@ export function ReportEditForm({ report, onCancel, onSaved }: ReportEditFormProp
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
             />
+          </div>
           </div>
         </div>
       </Card>

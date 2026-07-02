@@ -5,10 +5,12 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, PenLine, Upload } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { Button } from "@/components/ui";
+import { Button, Card } from "@/components/ui";
 import { ManualEntryForm } from "./ManualEntryForm";
 import { UploadReportForm } from "./UploadReportForm";
+import { BloodworkPhaseSelector } from "./BloodworkPhaseSelector";
 import { cn } from "@/utils/cn";
+import type { BloodworkPhaseInput } from "@/types/bloodwork";
 
 type Tab = "manual" | "upload";
 
@@ -16,6 +18,8 @@ export function BloodworkEntryView() {
   const searchParams = useSearchParams();
   const reportId = searchParams.get("reportId");
   const [tab, setTab] = useState<Tab>("manual");
+  const [phase, setPhase] = useState<BloodworkPhaseInput | null>(null);
+  const [phaseError, setPhaseError] = useState<string | null>(null);
 
   if (reportId) {
     return (
@@ -46,6 +50,17 @@ export function BloodworkEntryView() {
         }
       />
 
+      <Card variant="elevated" padding="lg" className="mb-6">
+        <BloodworkPhaseSelector
+          value={phase}
+          onChange={(next) => {
+            setPhase(next);
+            setPhaseError(null);
+          }}
+          error={phaseError}
+        />
+      </Card>
+
       <div className="flex gap-2 mb-6 p-1 rounded-xl bg-surface border border-border/50 w-fit">
         <button
           type="button"
@@ -75,7 +90,21 @@ export function BloodworkEntryView() {
         </button>
       </div>
 
-      {tab === "manual" ? <ManualEntryForm /> : <UploadReportForm />}
+      {tab === "manual" ? (
+        <ManualEntryForm
+          phase={phase}
+          onPhaseRequired={() =>
+            setPhaseError("Please select cruise or blast before saving your report.")
+          }
+        />
+      ) : (
+        <UploadReportForm
+          phase={phase}
+          onPhaseRequired={() =>
+            setPhaseError("Please select cruise or blast before uploading your report.")
+          }
+        />
+      )}
     </div>
   );
 }

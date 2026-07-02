@@ -9,6 +9,9 @@ const EMPTY_STATS: BloodworkDashboardStats = {
   latestReport: null,
   previousReports: [],
   totalOutOfRange: 0,
+  latestCruiseReport: null,
+  latestBlastReport: null,
+  hasCruiseBaseline: false,
 };
 
 export function useBloodworkDashboard() {

@@ -68,6 +68,10 @@ function flattenBloodwork(reports: BloodworkReportWithResults[]) {
       collection_date: report.collection_date,
       report_id: report.id,
       report_name: report.report_name,
+      phase:
+        report.phase === "cruise" || report.phase === "blast" || report.phase === "unknown"
+          ? report.phase
+          : null,
     }))
   );
 }
@@ -176,6 +180,8 @@ export async function buildInsightsContext(
       collection_date: r.collection_date,
       lab_name: r.lab_name,
       marker_count: r.bloodwork_results?.length ?? 0,
+      phase:
+        r.phase === "cruise" || r.phase === "blast" || r.phase === "unknown" ? r.phase : null,
     })),
     current_cycle: currentCycle,
     previous_cycles: previousCycles,
