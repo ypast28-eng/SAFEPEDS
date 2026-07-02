@@ -1,8 +1,8 @@
-import { isAiConfigured } from "@/lib/runtime/config";
+import { OPENAI_AI_SETUP_INSTRUCTIONS } from "@/lib/ai/openai-config";
 
-export const AI_NOT_CONFIGURED_MESSAGE =
-  "AI reports are not configured yet. Connect the FastAPI backend with OPENAI_API_KEY to enable AI features. Educational content is still available in the Knowledge Base and Health Library.";
+export const AI_NOT_CONFIGURED_MESSAGE = OPENAI_AI_SETUP_INSTRUCTIONS;
 
+/** @deprecated Use fetchAiReportConfig() — checks Next.js OpenAI API, not FastAPI */
 export function getAiUnavailableMessage(): string | null {
-  return isAiConfigured() ? null : AI_NOT_CONFIGURED_MESSAGE;
+  return null;
 }

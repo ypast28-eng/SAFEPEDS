@@ -106,6 +106,19 @@ export interface AiCycleReportRequest {
 }
 
 export interface AiCycleReportResult {
+  overall_risk_summary: string;
+  highest_risk_categories: Array<{
+    category_name: string;
+    level: string;
+    score: number;
+    explanation: string;
+  }>;
+  compound_concerns: Array<{
+    compound_name: string;
+    concerns: string[];
+  }>;
+  bloodwork_markers_to_monitor: string[];
+  harm_reduction_suggestions: string[];
   compound_summary: string;
   duration_summary: string;
   risk_explanation: string;
