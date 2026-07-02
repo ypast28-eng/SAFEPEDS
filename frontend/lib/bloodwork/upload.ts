@@ -29,3 +29,11 @@ export function formatReportStatus(status: BloodworkReportStatus): string {
       return status;
   }
 }
+
+/** Resolve storage path from report row (file_path or legacy uploaded_file_url). */
+export function getReportStoragePath(report: {
+  file_path?: string | null;
+  uploaded_file_url?: string | null;
+}): string | null {
+  return report.file_path ?? report.uploaded_file_url ?? null;
+}
