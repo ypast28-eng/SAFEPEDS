@@ -19,7 +19,7 @@ export function useUserCycles() {
     }
     setIsLoading(true);
     setError(null);
-    const { data, error: err } = await fetchUserCycles();
+    const { data, error: err } = await fetchUserCycles(user.id);
     setCycles(data);
     setError(err);
     setIsLoading(false);
