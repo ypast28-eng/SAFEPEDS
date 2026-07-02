@@ -28,7 +28,7 @@ import { AiBloodworkReportCard } from "@/components/ai";
 import { useProfile } from "@/hooks/useProfile";
 import { profileToAiContext, reportToAiContext } from "@/lib/ai/transform";
 import { formatLabDate, formatRefRange } from "@/utils/bloodwork";
-import { formatReportStatus, getReportStoragePath } from "@/lib/bloodwork/upload";
+import { formatReportStatus, canExtractBloodworkMarkers, getBloodworkResultCount, getReportStoragePath, reportHasUploadedFile } from "@/lib/bloodwork/upload";
 import type { BloodworkReportWithResults, ExtractedBloodworkMarker } from "@/types/bloodwork";
 
 interface ReportDetailViewProps {
@@ -60,6 +60,10 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
     if (storagePath) {
       const { url } = await getSignedFileUrl(storagePath);
       setFileUrl(url);
+    } else if (data?.file_url?.startsWith("http")) {
+      setFileUrl(data.file_url);
+    } else if (data?.uploaded_file_url?.startsWith("http")) {
+      setFileUrl(data.uploaded_file_url);
     } else {
       setFileUrl(null);
     }
@@ -136,11 +140,11 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
     );
   }
 
-  const hasUploadedFile = Boolean(getReportStoragePath(report));
-  const hasNoMarkers = report.bloodwork_results.length === 0;
-  const canExtract = hasUploadedFile && hasNoMarkers;
+  const hasUploadedFile = reportHasUploadedFile(report);
+  const markerCount = getBloodworkResultCount(report);
+  const canExtract = canExtractBloodworkMarkers(report);
 
-  const tableData = report.bloodwork_results.map((r) => ({
+  const tableData = (Array.isArray(report.bloodwork_results) ? report.bloodwork_results : []).map((r) => ({
     id: r.id,
     marker: r.marker_name,
     category: r.category,
@@ -151,7 +155,7 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
     date: formatLabDate(report.collection_date),
   }));
 
-  if (showReview && extractedMarkers && canExtract) {
+  if (showReview && extractedMarkers) {
     return (
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -258,7 +262,7 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
           </div>
           <div className="flex flex-wrap gap-2">
             <Badge variant="default">{formatReportStatus(report.status)}</Badge>
-            <Badge variant="primary">{report.bloodwork_results.length} markers</Badge>
+            <Badge variant="primary">{markerCount} markers</Badge>
             {(report.out_of_range_count ?? 0) > 0 && (
               <Badge variant="warning">{report.out_of_range_count} out of range</Badge>
             )}
@@ -276,26 +280,31 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
       </Card>
 
       {canExtract && (
-        <Card variant="bordered" padding="lg" className="border-primary/30 bg-primary/5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-base font-semibold text-foreground">Analyze uploaded report</h2>
-              <p className="text-sm text-muted mt-1">
-                This report has an uploaded file but no marker results yet. Use AI to read values
-                from your PDF or image, then review before saving.
-              </p>
+        <Card variant="elevated" padding="lg" className="border-2 border-primary/40 bg-primary/5">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                  Extract markers from your file
+                </h2>
+                <p className="text-sm text-muted mt-1">
+                  This report has an uploaded file ({report.file_name ?? "attached"}) but no saved
+                  results yet. Analyze the PDF or image with AI, then review values before saving.
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="lg"
+                onClick={handleExtractMarkers}
+                isLoading={isExtracting}
+                disabled={isExtracting}
+                className="shrink-0 w-full sm:w-auto"
+              >
+                <Sparkles className="h-4 w-4" />
+                Extract markers
+              </Button>
             </div>
-            <Button
-              type="button"
-              onClick={handleExtractMarkers}
-              isLoading={isExtracting}
-              disabled={isExtracting}
-              className="shrink-0"
-            >
-              <Sparkles className="h-4 w-4" />
-              Extract markers
-            </Button>
-          </div>
 
           {isExtracting && (
             <div
@@ -312,7 +321,7 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
           {extractError && (
             <div
               role="alert"
-              className="mt-4 rounded-lg border border-accent/30 bg-accent/10 px-4 py-3 text-sm text-accent"
+              className="rounded-lg border border-accent/30 bg-accent/10 px-4 py-3 text-sm text-accent"
             >
               <div className="flex items-start gap-2">
                 <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
@@ -328,6 +337,7 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
               </div>
             </div>
           )}
+          </div>
         </Card>
       )}
 

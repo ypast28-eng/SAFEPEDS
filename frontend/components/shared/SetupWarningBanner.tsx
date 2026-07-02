@@ -6,10 +6,16 @@ import { AlertTriangle } from "lucide-react";
 import { isLocalDemoMode, isBackendConfigured } from "@/lib/runtime/config";
 import { isSupabaseEnvConfigured } from "@/lib/supabase/env";
 
+/** True when the Next.js bloodwork extract route responds (any status except 404). */
 async function checkBloodworkExtractApiReachable(): Promise<boolean> {
   try {
-    const res = await fetch("/api/bloodwork/extract", { method: "GET" });
-    return res.ok;
+    const res = await fetch("/api/bloodwork/extract", {
+      method: "GET",
+      cache: "no-store",
+    });
+    if (res.status === 404) return false;
+    const json = (await res.json()) as { configured?: boolean };
+    return typeof json.configured === "boolean";
   } catch {
     return false;
   }
@@ -26,10 +32,10 @@ export function SetupWarningBanner() {
     checkBloodworkExtractApiReachable().then(setNextApiReachable);
   }, [supabaseOk]);
 
-  if (supabaseOk && backendOk) return null;
-  if (supabaseOk && nextApiReachable) return null;
+  // Supabase + FastAPI backend, or Supabase + deployed Next.js extract route — no banner.
+  if (supabaseOk && (backendOk || nextApiReachable === true)) return null;
 
-  // Avoid flashing the backend warning while we probe the Next.js API route.
+  // Wait for probe before showing backend-only warning (prevents flash on Vercel).
   if (supabaseOk && !backendOk && nextApiReachable === null) return null;
 
   return (

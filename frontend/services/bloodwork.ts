@@ -31,19 +31,31 @@ const BUCKET = "bloodwork-reports";
 function normalizeReport<T extends BloodworkReport & { bloodwork_results?: { length: number } }>(
   row: T
 ): T {
-  const resultsCount = row.bloodwork_results?.length ?? 0;
-  const filePath = row.file_path ?? row.uploaded_file_url ?? null;
+  const results = Array.isArray(row.bloodwork_results) ? row.bloodwork_results : [];
+  const resultsCount = results.length;
+  const filePath =
+    (typeof row.file_path === "string" && row.file_path.trim()) ||
+    (typeof row.uploaded_file_url === "string" &&
+    !row.uploaded_file_url.startsWith("http")
+      ? row.uploaded_file_url.trim()
+      : null) ||
+    null;
+  const legacyUrl =
+    typeof row.uploaded_file_url === "string" && row.uploaded_file_url.startsWith("http")
+      ? row.uploaded_file_url.trim()
+      : null;
   return {
     ...row,
+    bloodwork_results: results as T["bloodwork_results"],
     file_name: row.file_name ?? null,
     file_type: row.file_type ?? null,
     file_size: row.file_size ?? null,
     file_path: filePath,
-    file_url: row.file_url ?? null,
-    uploaded_file_url: filePath,
+    file_url: row.file_url ?? legacyUrl ?? null,
+    uploaded_file_url: filePath ?? row.uploaded_file_url ?? null,
     status:
       row.status ??
-      (resultsCount > 0 ? "complete" : filePath ? "uploaded" : "uploaded"),
+      (resultsCount > 0 ? "complete" : filePath || legacyUrl ? "uploaded" : "uploaded"),
   };
 }
 

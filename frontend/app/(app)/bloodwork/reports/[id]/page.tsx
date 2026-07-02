@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { ReportDetailView } from "@/components/bloodwork";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Bloodwork Report",
 };
