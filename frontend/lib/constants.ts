@@ -1,7 +1,9 @@
 import type { FAQItem, Feature, NavItem, PricingTier } from "@/types";
 
 /** Application metadata */
-export const APP_NAME = "PED Health AI";
+export const APP_NAME = "PEDSAFE";
+/** Split brand mark for logo styling (PED + SAFE) */
+export const APP_BRAND_MARK = { prefix: "PED", suffix: "SAFE" } as const;
 export const APP_TAGLINE = "Educational Health Monitoring for Performance Athletes";
 export const APP_DESCRIPTION =
   "Track bloodwork, understand compound risks, and receive AI-powered educational insights. Not medical advice — educational guidance only.";
@@ -171,9 +173,9 @@ export const PRICING_TIERS: PricingTier[] = [
 /** FAQ items — placeholder */
 export const FAQ_ITEMS: FAQItem[] = [
   {
-    question: "Is PED Health AI a medical service?",
+    question: "Is PEDSAFE a medical service?",
     answer:
-      "No. PED Health AI is an educational and health-monitoring platform. It does not diagnose diseases, prescribe treatments, or replace professional medical advice. Always consult a qualified healthcare provider for medical decisions.",
+      "No. PEDSAFE is an educational and health-monitoring platform. It does not diagnose diseases, prescribe treatments, or replace professional medical advice. Always consult a qualified healthcare provider for medical decisions.",
   },
   {
     question: "What kind of data can I track?",
@@ -199,4 +201,4 @@ export const FAQ_ITEMS: FAQItem[] = [
 
 /** Medical disclaimer shown across the app */
 export const MEDICAL_DISCLAIMER =
-  "PED Health AI is for educational purposes only. It is not intended to diagnose, treat, cure, or prevent any disease. Always seek the advice of a qualified healthcare provider.";
+  "PEDSAFE is for educational purposes only. It is not intended to diagnose, treat, cure, or prevent any disease. Always seek the advice of a qualified healthcare provider.";

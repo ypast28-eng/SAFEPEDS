@@ -5,7 +5,7 @@
 
 export const config = {
   app: {
-    name: "PED Health AI",
+    name: "PEDSAFE",
     url: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
   },
   api: {

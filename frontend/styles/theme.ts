@@ -1,5 +1,5 @@
 /**
- * PED Health AI — Design tokens
+ * PEDSAFE — Design tokens
  * Premium bodybuilding + healthcare aesthetic (dark theme)
  */
 
