@@ -6,17 +6,63 @@ import {
   OPENAI_SETUP_INSTRUCTIONS,
 } from "@/lib/ai/extraction-config";
 import { matchExtractedMarkers } from "@/lib/bloodwork/match-markers";
+import { getReportStoragePath } from "@/lib/bloodwork/upload";
 import type { BloodMarker } from "@/types/bloodwork";
 
 export const runtime = "nodejs";
 
 const BUCKET = "bloodwork-reports";
 
-function getStoragePath(report: {
-  file_path?: string | null;
+function resolveFileUrl(report: {
+  file_url?: string | null;
   uploaded_file_url?: string | null;
 }): string | null {
-  return report.file_path ?? report.uploaded_file_url ?? null;
+  const url = report.file_url?.trim() || "";
+  if (url.startsWith("http")) return url;
+  const legacy = report.uploaded_file_url?.trim() || "";
+  if (legacy.startsWith("http")) return legacy;
+  return null;
+}
+
+async function downloadReportFile(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  report: {
+    file_path?: string | null;
+    uploaded_file_url?: string | null;
+    file_url?: string | null;
+    file_type?: string | null;
+    file_name?: string | null;
+  }
+): Promise<{ buffer: Buffer; mimeType: string; fileName: string } | null> {
+  const storagePath = getReportStoragePath(report);
+  if (storagePath) {
+    const { data: fileBlob, error: downloadError } = await supabase.storage
+      .from(BUCKET)
+      .download(storagePath);
+
+    if (!downloadError && fileBlob) {
+      return {
+        buffer: Buffer.from(await fileBlob.arrayBuffer()),
+        mimeType: report.file_type || fileBlob.type || "application/octet-stream",
+        fileName: report.file_name ?? storagePath.split("/").pop() ?? "report",
+      };
+    }
+  }
+
+  const fileUrl = resolveFileUrl(report);
+  if (!fileUrl) return null;
+
+  const response = await fetch(fileUrl);
+  if (!response.ok) return null;
+
+  return {
+    buffer: Buffer.from(await response.arrayBuffer()),
+    mimeType:
+      report.file_type ||
+      response.headers.get("content-type") ||
+      "application/octet-stream",
+    fileName: report.file_name ?? "report",
+  };
 }
 
 export async function GET() {
@@ -74,25 +120,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Report not found" }, { status: 404 });
     }
 
-    const storagePath = getStoragePath(report);
-    if (!storagePath) {
+    const storagePath = getReportStoragePath(report);
+    const fileUrl = resolveFileUrl(report);
+    if (!storagePath && !fileUrl) {
       return NextResponse.json({ error: "This report has no uploaded file" }, { status: 400 });
     }
 
-    const { data: fileBlob, error: downloadError } = await supabase.storage
-      .from(BUCKET)
-      .download(storagePath);
-
-    if (downloadError || !fileBlob) {
+    const downloaded = await downloadReportFile(supabase, report);
+    if (!downloaded) {
       return NextResponse.json(
-        { error: downloadError?.message ?? "Failed to download file from storage" },
+        { error: "Failed to download file from storage" },
         { status: 500 }
       );
     }
 
-    const buffer = Buffer.from(await fileBlob.arrayBuffer());
-    const mimeType = report.file_type || fileBlob.type || "application/octet-stream";
-    const fileName = report.file_name ?? storagePath.split("/").pop() ?? "report";
+    const { buffer, mimeType, fileName } = downloaded;
 
     const rawMarkers = await extractMarkersFromFile(buffer, mimeType, fileName);
 
