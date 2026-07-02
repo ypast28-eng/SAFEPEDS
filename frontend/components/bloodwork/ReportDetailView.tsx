@@ -11,6 +11,7 @@ import { AiBloodworkReportCard } from "@/components/ai";
 import { useProfile } from "@/hooks/useProfile";
 import { profileToAiContext, reportToAiContext } from "@/lib/ai/transform";
 import { formatLabDate, formatRefRange } from "@/utils/bloodwork";
+import { formatReportStatus } from "@/lib/bloodwork/upload";
 import type { BloodworkReportWithResults } from "@/types/bloodwork";
 
 interface ReportDetailViewProps {
@@ -126,6 +127,7 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Badge variant="default">{formatReportStatus(report.status)}</Badge>
             <Badge variant="primary">{report.bloodwork_results.length} markers</Badge>
             {(report.out_of_range_count ?? 0) > 0 && (
               <Badge variant="warning">{report.out_of_range_count} out of range</Badge>
@@ -133,7 +135,7 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
             {report.uploaded_file_url && (
               <Badge variant="info">
                 <FileText className="h-3 w-3 mr-1" />
-                File attached
+                {report.file_name ?? "File attached"}
               </Badge>
             )}
           </div>

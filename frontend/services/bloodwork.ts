@@ -15,6 +15,7 @@ import type {
   BloodworkDashboardStats,
   BloodworkHistoryPoint,
   BloodworkReport,
+  BloodworkReportStatus,
   BloodworkReportWithResults,
   BloodworkResultInput,
   CreateReportInput,
@@ -24,6 +25,33 @@ import type {
 export { calculateStatus } from "@/lib/bloodwork/status";
 
 const BUCKET = "bloodwork-reports";
+
+function normalizeReport<T extends BloodworkReport & { bloodwork_results?: { length: number } }>(
+  row: T
+): T {
+  const resultsCount = row.bloodwork_results?.length ?? 0;
+  return {
+    ...row,
+    file_name: row.file_name ?? null,
+    file_type: row.file_type ?? null,
+    status:
+      row.status ??
+      (resultsCount > 0 ? "complete" : row.uploaded_file_url ? "uploaded" : "uploaded"),
+  };
+}
+
+function reportInsertPayload(userId: string, input: Omit<CreateReportInput, "results">) {
+  return {
+    user_id: userId,
+    report_name: input.report_name.trim(),
+    lab_name: input.lab_name?.trim() || null,
+    collection_date: input.collection_date,
+    notes: input.notes?.trim() || null,
+    file_name: input.file_name ?? null,
+    file_type: input.file_type ?? null,
+    status: input.status ?? "uploaded",
+  };
+}
 
 export async function fetchBloodMarkers(): Promise<{
   data: BloodMarker[];
@@ -72,7 +100,7 @@ export async function fetchReportsWithStats(): Promise<{
       (res) => res.status === "Low" || res.status === "High"
     ).length;
     return { ...row, bloodwork_results: results, out_of_range_count };
-  });
+  }).map((row) => normalizeReport(row));
 
   const latestReport = enriched[0] ?? null;
   const previousReports = enriched.slice(1);
@@ -109,9 +137,11 @@ export async function fetchReportById(
   const results = (data.bloodwork_results ?? []) as BloodworkReportWithResults["bloodwork_results"];
   return {
     data: {
-      ...data,
-      bloodwork_results: results.sort((a, b) => a.marker_name.localeCompare(b.marker_name)),
-      out_of_range_count: results.filter((r) => r.status === "Low" || r.status === "High").length,
+      ...normalizeReport({
+        ...data,
+        bloodwork_results: results.sort((a, b) => a.marker_name.localeCompare(b.marker_name)),
+        out_of_range_count: results.filter((r) => r.status === "Low" || r.status === "High").length,
+      } as BloodworkReportWithResults),
     } as BloodworkReportWithResults,
     error: null,
   };
@@ -130,11 +160,8 @@ export async function createReportWithResults(
   const { data: report, error: reportError } = await supabase
     .from("bloodwork_reports")
     .insert({
-      user_id: userId,
-      report_name: input.report_name.trim(),
-      lab_name: input.lab_name?.trim() || null,
-      collection_date: input.collection_date,
-      notes: input.notes?.trim() || null,
+      ...reportInsertPayload(userId, input),
+      status: input.status ?? (input.results.length > 0 ? "complete" : "uploaded"),
     })
     .select()
     .single();
@@ -184,7 +211,11 @@ export async function uploadReportFile(
 
   const { error: updateError } = await supabase
     .from("bloodwork_reports")
-    .update({ uploaded_file_url: path })
+    .update({
+      uploaded_file_url: path,
+      file_name: file.name,
+      file_type: file.type,
+    })
     .eq("id", reportId);
 
   if (updateError) return { url: null, error: updateError.message };
@@ -197,16 +228,51 @@ export async function createReportWithFile(
   input: Omit<CreateReportInput, "results">,
   file: File
 ): Promise<{ data: BloodworkReport | null; error: string | null }> {
-  const { data: report, error } = await createReportWithResults(userId, {
-    ...input,
-    results: [],
-  });
-  if (error || !report) return { data: null, error };
+  if (!isSupabaseEnvConfigured()) {
+    return { data: null, error: "File upload requires Supabase. Sign in and configure your project." };
+  }
+
+  const supabase = tryCreateClient()!;
+
+  const { data: report, error: reportError } = await supabase
+    .from("bloodwork_reports")
+    .insert({
+      ...reportInsertPayload(userId, {
+        ...input,
+        file_name: file.name,
+        file_type: file.type,
+        status: "uploaded",
+      }),
+    })
+    .select()
+    .single();
+
+  if (reportError) return { data: null, error: reportError.message };
 
   const { error: uploadError } = await uploadReportFile(userId, report.id, file);
-  if (uploadError) return { data: report, error: uploadError };
+  if (uploadError) {
+    await supabase.from("bloodwork_reports").delete().eq("id", report.id);
+    return { data: null, error: uploadError };
+  }
 
-  return { data: report, error: null };
+  return { data: report as BloodworkReport, error: null };
+}
+
+export async function updateReportStatus(
+  reportId: string,
+  status: BloodworkReportStatus
+): Promise<{ error: string | null }> {
+  if (!isSupabaseEnvConfigured()) {
+    return { error: "Supabase is not configured." };
+  }
+
+  const supabase = tryCreateClient()!;
+  const { error } = await supabase
+    .from("bloodwork_reports")
+    .update({ status })
+    .eq("id", reportId);
+
+  return { error: error?.message ?? null };
 }
 
 export async function appendResultsToReport(
@@ -233,7 +299,10 @@ export async function appendResultsToReport(
   }));
 
   const { error } = await supabase.from("bloodwork_results").insert(rows);
-  return { error: error?.message ?? null };
+  if (error) return { error: error.message };
+
+  await supabase.from("bloodwork_reports").update({ status: "complete" }).eq("id", reportId);
+  return { error: null };
 }
 
 export async function deleteReport(id: string): Promise<{ error: string | null }> {

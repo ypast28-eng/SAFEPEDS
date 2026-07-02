@@ -15,6 +15,7 @@ export {
   createReportWithResults,
   createReportWithFile,
   uploadReportFile,
+  updateReportStatus,
   appendResultsToReport,
   deleteReport,
   fetchHistoryForMarker,

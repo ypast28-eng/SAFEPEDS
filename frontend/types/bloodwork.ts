@@ -14,6 +14,9 @@ export interface BloodMarker {
   created_at: string;
 }
 
+/** Bloodwork report processing status */
+export type BloodworkReportStatus = "uploaded" | "pending_review" | "complete";
+
 export interface BloodworkReport {
   id: string;
   user_id: string;
@@ -21,6 +24,9 @@ export interface BloodworkReport {
   lab_name: string | null;
   collection_date: string;
   uploaded_file_url: string | null;
+  file_name: string | null;
+  file_type: string | null;
+  status: BloodworkReportStatus;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -78,7 +84,13 @@ export interface CreateReportInput {
   collection_date: string;
   notes?: string;
   results: BloodworkResultInput[];
+  file_name?: string;
+  file_type?: string;
+  status?: BloodworkReportStatus;
 }
+
+export const BLOODWORK_UPLOAD_ACCEPT = "application/pdf,image/jpeg,image/png";
+export const BLOODWORK_UPLOAD_MAX_BYTES = 20 * 1024 * 1024;
 
 export type TrendTimeRange = "3m" | "6m" | "12m" | "all";
 
