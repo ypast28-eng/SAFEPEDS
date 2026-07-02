@@ -32,7 +32,6 @@ export {
 export {
   generateBloodworkReport,
   generateCycleReport,
-  generateTimeline,
   generateInsights,
   sendChatMessage,
   fetchChatHistory,

@@ -53,12 +53,6 @@ export const APP_NAV_ITEMS: NavItem[] = [
     description: "Educational health assistant",
   },
   {
-    label: "AI Timeline",
-    href: "/ai/timeline",
-    icon: "Brain",
-    description: "Chronological health summary",
-  },
-  {
     label: "Knowledge Base",
     href: "/knowledge-base",
     icon: "BookOpen",
