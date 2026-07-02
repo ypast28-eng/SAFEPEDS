@@ -5,6 +5,14 @@ export const AI_REPORT_MODEL = "gpt-4o-mini";
 export const AI_DISCLAIMER =
   "This AI-generated content is for educational purposes only. It is not medical advice, diagnosis, or a safety determination. Consult a qualified healthcare provider for medical decisions.";
 
+export const OPENAI_BILLING_ERROR = `OpenAI API billing or quota limit reached.
+
+1. Sign in at https://platform.openai.com/account/billing
+2. Add a payment method or increase your usage limits
+3. Redeploy after your account is active
+
+Educational content is still available in the Knowledge Base and Health Library.`;
+
 export const OPENAI_AI_SETUP_INSTRUCTIONS = `AI reports are not configured yet.
 
 Add your OpenAI API key to the frontend environment (server-only — never expose it in the browser):
