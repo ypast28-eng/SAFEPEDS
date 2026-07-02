@@ -14,6 +14,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { Button, Card, Badge, Select } from "@/components/ui";
 import { RiskGauge } from "./RiskGauge";
 import { CategoryRiskCard } from "./CategoryRiskCard";
+import { CompoundRiskList } from "./CompoundRiskList";
 import { AiCycleReportCard } from "@/components/ai";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
@@ -27,6 +28,10 @@ import {
   profileToRiskInput,
 } from "@/lib/risk/transform";
 import {
+  buildCompoundRiskHighlights,
+  pickDefaultCycleId,
+} from "@/lib/risk/compound-insights";
+import {
   cycleToAiContext,
   profileToAiContext,
   riskToAiContext,
@@ -37,50 +42,72 @@ import type { UserCycleWithCompounds } from "@/types/cycles";
 export function RiskDashboardView() {
   const { user } = useAuth();
   const { profile } = useProfile();
-  const { cycles, isLoading: cyclesLoading } = useUserCycles();
+  const { cycles, isLoading: cyclesLoading, error: cyclesError } = useUserCycles();
   const [selectedCycleId, setSelectedCycleId] = useState<string>("");
   const [assessment, setAssessment] = useState<RiskAssessmentResult | null>(null);
+  const [rulesSource, setRulesSource] = useState<string | null>(null);
   const [cycleDetail, setCycleDetail] = useState<UserCycleWithCompounds | null>(null);
   const [history, setHistory] = useState<RiskHistoryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const runAssessment = useCallback(async (cycleId: string) => {
-    if (!cycleId || !user) return;
-    setIsLoading(true);
-    setError(null);
-    try {
-      const [{ data: cycle }, { data: stats }] = await Promise.all([
-        fetchCycleById(cycleId),
-        fetchReportsWithStats(),
-      ]);
-      if (!cycle) {
-        setError("Cycle not found");
-        return;
+  const runAssessment = useCallback(
+    async (cycleId: string) => {
+      if (!cycleId || !user) return;
+      setIsLoading(true);
+      setError(null);
+      try {
+        const [{ data: cycle, error: cycleError }, { data: stats }] = await Promise.all([
+          fetchCycleById(cycleId),
+          fetchReportsWithStats(),
+        ]);
+
+        if (cycleError) {
+          setError(cycleError);
+          return;
+        }
+
+        if (!cycle) {
+          setError("Cycle not found");
+          return;
+        }
+
+        if (cycle.cycle_compounds.length === 0) {
+          setCycleDetail(cycle);
+          setAssessment(null);
+          setError("This cycle has no compounds yet. Add compounds in Cycle Builder before running risk assessment.");
+          return;
+        }
+
+        setCycleDetail(cycle);
+        const result = await calculateRisk(
+          {
+            user_profile: profileToRiskInput(profile),
+            cycle: cycleToRiskInput(cycle),
+            bloodwork: bloodworkToRiskInput(stats.latestReport),
+            goal: cycle.goal,
+          },
+          user.id
+        );
+        setAssessment(result);
+        setRulesSource(result.rules_source ?? null);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to calculate risk");
+        setAssessment(null);
+      } finally {
+        setIsLoading(false);
       }
-      setCycleDetail(cycle);
-      const result = await calculateRisk(
-        {
-          user_profile: profileToRiskInput(profile),
-          cycle: cycleToRiskInput(cycle),
-          bloodwork: bloodworkToRiskInput(stats.latestReport),
-          goal: cycle.goal,
-        },
-        user.id
-      );
-      setAssessment(result);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to calculate risk");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user, profile]);
+    },
+    [user, profile]
+  );
 
   useEffect(() => {
-    if (cycles.length > 0 && !selectedCycleId) {
-      setSelectedCycleId(cycles[0].id);
+    if (cycles.length === 0) {
+      setSelectedCycleId("");
+      return;
     }
-  }, [cycles, selectedCycleId]);
+    setSelectedCycleId((current) => current || pickDefaultCycleId(cycles));
+  }, [cycles]);
 
   useEffect(() => {
     if (selectedCycleId) {
@@ -101,7 +128,7 @@ export function RiskDashboardView() {
     <div>
       <PageHeader
         title="Risk Dashboard"
-        description="Educational risk scores from transparent, configurable rules. Not medical advice — does not determine safety."
+        description="Educational risk scores from your saved cycles and transparent rule-based scoring. Not medical advice — does not determine safety."
         badge="Rule-Based Scoring"
         badgeVariant="warning"
         actions={
@@ -122,17 +149,19 @@ export function RiskDashboardView() {
         }
       />
 
-      {/* Cycle selector */}
       <Card variant="elevated" padding="md" className="mb-6">
         <div className="flex flex-col sm:flex-row gap-4 items-end">
           <div className="flex-1 w-full">
             <Select
-              label="Select Cycle"
+              label="Select saved cycle"
               value={selectedCycleId}
               onChange={(e) => setSelectedCycleId(e.target.value)}
-              options={cycles.map((c) => ({ label: c.cycle_name, value: c.id }))}
-              placeholder={cyclesLoading ? "Loading…" : "Choose a cycle"}
-              disabled={cycles.length === 0}
+              options={cycles.map((c) => ({
+                label: `${c.cycle_name} (${c.compound_count} compound${c.compound_count === 1 ? "" : "s"})`,
+                value: c.id,
+              }))}
+              placeholder={cyclesLoading ? "Loading cycles…" : "Choose a cycle"}
+              disabled={cycles.length === 0 || cyclesLoading}
             />
           </div>
           <Button
@@ -145,13 +174,34 @@ export function RiskDashboardView() {
             Recalculate
           </Button>
         </div>
+        {selectedCycle && (
+          <p className="text-xs text-muted mt-3">
+            Analyzing compounds, doses, duration, and overlap from your saved cycle in Supabase.
+            {selectedCycle.end_date
+              ? ` Planned end: ${selectedCycle.end_date}.`
+              : " No end date set — treated as active/latest."}
+          </p>
+        )}
       </Card>
 
-      {cycles.length === 0 && !cyclesLoading && (
+      {cyclesLoading && (
+        <div className="text-center py-16 animate-pulse text-muted">Loading your saved cycles…</div>
+      )}
+
+      {cyclesError && (
+        <div
+          role="alert"
+          className="mb-6 rounded-lg border border-accent/30 bg-accent/10 px-4 py-3 text-sm text-accent"
+        >
+          Could not load cycles: {cyclesError}
+        </div>
+      )}
+
+      {!cyclesLoading && cycles.length === 0 && (
         <Card variant="bordered" padding="lg">
           <div className="text-center py-12">
             <ShieldAlert className="h-10 w-10 text-muted mx-auto mb-3" />
-            <p className="text-sm text-muted mb-4">Create a cycle to run risk assessment.</p>
+            <p className="text-sm text-muted mb-4">Create a cycle first.</p>
             <Link href="/cycle-builder">
               <Button>Open Cycle Builder</Button>
             </Link>
@@ -160,33 +210,32 @@ export function RiskDashboardView() {
       )}
 
       {error && (
-        <div role="alert" className="mb-6 rounded-lg border border-accent/30 bg-accent/10 px-4 py-3 text-sm text-accent flex items-start gap-2">
+        <div
+          role="alert"
+          className="mb-6 rounded-lg border border-accent/30 bg-accent/10 px-4 py-3 text-sm text-accent flex items-start gap-2"
+        >
           <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-          <div>
-            <p>{error}</p>
-            <p className="text-xs mt-1 text-accent/80">Ensure the FastAPI backend is running at {process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}</p>
-          </div>
+          <p>{error}</p>
         </div>
       )}
 
-      {isLoading && !assessment && (
-        <div className="text-center py-16 animate-pulse text-muted">Calculating educational risk scores…</div>
+      {isLoading && !assessment && cycles.length > 0 && (
+        <div className="text-center py-16 animate-pulse text-muted">
+          Calculating educational risk scores from your saved cycle…
+        </div>
       )}
 
-      {assessment && (
+      {assessment && cycleDetail && (
         <div className="space-y-8 animate-fade-slide-up">
-          {/* Overall + cycle summary */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <Card variant="elevated" padding="lg" className="lg:col-span-1 flex flex-col items-center justify-center">
-              <p className="text-xs text-muted uppercase tracking-wider mb-4">Overall Monitoring Priority</p>
-              <RiskGauge
-                score={assessment.overall_score}
-                level={assessment.overall_level}
-                size="lg"
-              />
-              <Badge variant="default" className="mt-4">
-                {assessment.triggered_rules_count} rules triggered
-              </Badge>
+              <p className="text-xs text-muted uppercase tracking-wider mb-4">Overall Risk Score</p>
+              <RiskGauge score={assessment.overall_score} level={assessment.overall_level} size="lg" />
+              <div className="flex flex-wrap gap-2 mt-4 justify-center">
+                <Badge variant="default">{assessment.triggered_rules_count} rules triggered</Badge>
+                {rulesSource === "supabase" && <Badge variant="primary">Supabase rules</Badge>}
+                {rulesSource === "fallback" && <Badge variant="secondary">Fallback rules</Badge>}
+              </div>
             </Card>
 
             <Card variant="gradient" padding="lg" className="lg:col-span-2">
@@ -198,7 +247,7 @@ export function RiskDashboardView() {
                 <div className="flex flex-wrap gap-2 mb-4">
                   <Badge variant="secondary">{selectedCycle.cycle_name}</Badge>
                   {selectedCycle.goal && <Badge variant="default">{selectedCycle.goal}</Badge>}
-                  <Badge variant="info">{selectedCycle.compound_count} compounds</Badge>
+                  <Badge variant="info">{cycleDetail.cycle_compounds.length} compounds</Badge>
                 </div>
               )}
               <p className="text-sm text-muted leading-relaxed">{assessment.summary}</p>
@@ -206,7 +255,7 @@ export function RiskDashboardView() {
               {assessment.monitoring_recommendations.length > 0 && (
                 <div className="mt-4 pt-4 border-t border-border/50">
                   <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">
-                    Monitoring Placeholders
+                    Educational Monitoring Notes
                   </p>
                   <ul className="space-y-1.5">
                     {assessment.monitoring_recommendations.map((rec, i) => (
@@ -221,12 +270,17 @@ export function RiskDashboardView() {
             </Card>
           </div>
 
-          {/* Category grid */}
           <div>
-            <h2 className="text-base font-semibold text-foreground mb-4">Risk Categories</h2>
+            <h2 className="text-base font-semibold text-foreground mb-4">Compound-Level Risks</h2>
+            <CompoundRiskList
+              compounds={buildCompoundRiskHighlights(cycleToRiskInput(cycleDetail).compounds)}
+            />
+          </div>
+
+          <div>
+            <h2 className="text-base font-semibold text-foreground mb-4">Category Risk Ratings</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
               {assessment.categories
-                .filter((c) => c.score > 0 || c.triggered_rules.length > 0)
                 .sort((a, b) => b.score - a.score)
                 .map((cat, i) => (
                   <CategoryRiskCard key={cat.category} category={cat} index={i} />
@@ -234,17 +288,15 @@ export function RiskDashboardView() {
             </div>
           </div>
 
-          {cycleDetail && assessment && (
-            <Card variant="elevated" padding="lg">
-              <AiCycleReportCard
-                request={{
-                  profile: profileToAiContext(profile),
-                  cycle: cycleToAiContext(cycleDetail),
-                  risk_assessment: riskToAiContext(assessment),
-                }}
-              />
-            </Card>
-          )}
+          <Card variant="elevated" padding="lg">
+            <AiCycleReportCard
+              request={{
+                profile: profileToAiContext(profile),
+                cycle: cycleToAiContext(cycleDetail),
+                risk_assessment: riskToAiContext(assessment),
+              }}
+            />
+          </Card>
 
           {history.length > 0 && (
             <Card variant="bordered" padding="md">
@@ -259,7 +311,9 @@ export function RiskDashboardView() {
                     className="flex items-center justify-between text-sm py-2 border-b border-border/20 last:border-0"
                   >
                     <div>
-                      <span className="text-foreground capitalize">{entry.assessment_type.replace("_", " ")}</span>
+                      <span className="text-foreground capitalize">
+                        {entry.assessment_type.replace("_", " ")}
+                      </span>
                       <span className="text-muted text-xs ml-2">
                         {new Date(entry.created_at).toLocaleDateString()}
                       </span>

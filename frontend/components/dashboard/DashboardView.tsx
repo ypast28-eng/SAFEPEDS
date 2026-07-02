@@ -91,7 +91,7 @@ export function DashboardView() {
           bloodwork: bloodworkToRiskInput(stats.latestReport),
         }, undefined, false);
         setRiskLevel(result.overall_level);
-        setRiskSub(`Score ${result.overall_score} · placeholder rules`);
+        setRiskSub(`Score ${result.overall_score} · ${cycle.cycle_name}`);
       } catch {
         setRiskLevel("—");
       }

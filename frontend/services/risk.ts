@@ -1,5 +1,6 @@
 import { config } from "@/lib/config";
 import { isBackendConfigured } from "@/lib/runtime/config";
+import { isSupabaseEnvConfigured } from "@/lib/supabase/env";
 import { calculateLocalRisk } from "@/lib/risk/local-engine";
 import type {
   CompareCyclesResult,
@@ -12,6 +13,10 @@ import type {
 } from "@/types/risk";
 
 const BASE = `${config.api.baseUrl}/api/v1/risk`;
+
+export type RiskAssessmentResultWithSource = RiskAssessmentResult & {
+  rules_source?: "supabase" | "fallback" | "fastapi";
+};
 
 async function post<T>(path: string, body: unknown, params?: Record<string, string>): Promise<T> {
   const url = new URL(`${BASE}${path}`);
@@ -38,21 +43,46 @@ async function get<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function calculateViaNextApi(
+  input: RiskEngineInput,
+  userId?: string,
+  save = true
+): Promise<RiskAssessmentResultWithSource | null> {
+  try {
+    const res = await fetch("/api/risk/calculate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ input, userId, save }),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as RiskAssessmentResultWithSource;
+  } catch {
+    return null;
+  }
+}
+
 export async function calculateRisk(
   input: RiskEngineInput,
   userId?: string,
   save = true
-): Promise<RiskAssessmentResult> {
-  if (!isBackendConfigured()) {
-    return calculateLocalRisk(input);
+): Promise<RiskAssessmentResultWithSource> {
+  if (isSupabaseEnvConfigured()) {
+    const nextResult = await calculateViaNextApi(input, userId, save);
+    if (nextResult) return nextResult;
   }
-  try {
-    const params: Record<string, string> = { save: String(save) };
-    if (userId) params.user_id = userId;
-    return await post<RiskAssessmentResult>("/calculate", input, params);
-  } catch {
-    return calculateLocalRisk(input);
+
+  if (isBackendConfigured()) {
+    try {
+      const params: Record<string, string> = { save: String(save) };
+      if (userId) params.user_id = userId;
+      const result = await post<RiskAssessmentResult>("/calculate", input, params);
+      return { ...result, rules_source: "fastapi" };
+    } catch {
+      // fall through to local engine
+    }
   }
+
+  return { ...calculateLocalRisk(input), rules_source: "fallback" };
 }
 
 export async function compareCycles(
@@ -124,7 +154,7 @@ export async function whatIfAnalysis(
         level_b: modified.categories[i]?.level ?? "Very Low",
         score_delta: (modified.categories[i]?.score ?? 0) - cat.score,
       })),
-      summary: "Local placeholder what-if comparison for MVP testing.",
+      summary: "Educational what-if comparison using saved cycle data.",
       disclaimer: modified.disclaimer,
     };
   }
@@ -137,9 +167,20 @@ export async function fetchRiskHistory(
   userId: string,
   limit = 20
 ): Promise<RiskHistoryEntry[]> {
-  if (!isBackendConfigured()) return [];
+  if (isBackendConfigured()) {
+    try {
+      return await get<RiskHistoryEntry[]>(`/history/${userId}?limit=${limit}`);
+    } catch {
+      // try Supabase below
+    }
+  }
+
+  if (!isSupabaseEnvConfigured()) return [];
+
   try {
-    return await get<RiskHistoryEntry[]>(`/history/${userId}?limit=${limit}`);
+    const res = await fetch(`/api/risk/history?limit=${limit}`);
+    if (!res.ok) return [];
+    return (await res.json()) as RiskHistoryEntry[];
   } catch {
     return [];
   }

@@ -1,0 +1,33 @@
+export const CATEGORY_DISPLAY_NAMES: Record<string, string> = {
+  liver: "Liver",
+  kidney: "Kidney",
+  cardiovascular: "Cardiovascular",
+  blood_pressure: "Blood Pressure",
+  lipids: "Lipids",
+  hematocrit: "Hematocrit / Hematology",
+  hormonal_suppression: "HPTA / Hormonal Suppression",
+  estrogen: "Estrogen / Aromatization",
+  prolactin: "Prolactin / 19-Nor",
+  sleep: "Sleep",
+  mental_wellbeing: "Mental / Mood",
+  fertility: "Fertility",
+  injection_burden: "Injection Burden",
+  overall_monitoring_priority: "Overall Monitoring Priority",
+};
+
+export const MONITORING_PLACEHOLDERS: Record<string, string> = {
+  liver: "Consider periodic liver enzyme panels per your clinician.",
+  kidney: "Monitor renal markers per your supplied lab reference ranges.",
+  cardiovascular: "Track cardiovascular markers and blood pressure regularly.",
+  blood_pressure: "Self-monitor blood pressure; log readings over time.",
+  lipids: "Repeat lipid panels at intervals appropriate to your protocol.",
+  hematocrit: "Track hematocrit/CBC markers on your logged schedule.",
+  hormonal_suppression: "Hormone panels may be relevant — educational tracking only.",
+  estrogen: "Estradiol tracking may be relevant depending on stack composition.",
+  prolactin: "Prolactin monitoring placeholder — consult literature and clinician.",
+  sleep: "Track sleep quality subjectively alongside protocol changes.",
+  mental_wellbeing: "Monitor mood and wellbeing; seek support if needed.",
+  fertility: "Reproductive health awareness; educational monitoring only.",
+  injection_burden: "Review injection frequency and rotation practices.",
+  overall_monitoring_priority: "Increase overall monitoring frequency for complex stacks.",
+};

@@ -19,7 +19,7 @@ const CYCLE_COMPOUND_SELECT = `
   )
 `;
 
-export async function fetchUserCycles(): Promise<{
+export async function fetchUserCycles(userId?: string): Promise<{
   data: UserCycleWithCount[];
   error: string | null;
 }> {
@@ -28,10 +28,12 @@ export async function fetchUserCycles(): Promise<{
   }
 
   const supabase = tryCreateClient()!;
-  const { data: cycles, error } = await supabase
-    .from("user_cycles")
-    .select("*")
-    .order("updated_at", { ascending: false });
+  let query = supabase.from("user_cycles").select("*").order("updated_at", { ascending: false });
+  if (userId) {
+    query = query.eq("user_id", userId);
+  }
+
+  const { data: cycles, error } = await query;
 
   if (error) return { data: [], error: error.message };
   if (!cycles?.length) return { data: [], error: null };
