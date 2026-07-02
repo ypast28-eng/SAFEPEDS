@@ -30,6 +30,7 @@ import { AiBloodworkReportCard } from "@/components/ai";
 import { useProfile } from "@/hooks/useProfile";
 import { profileToAiContext, reportToAiContext } from "@/lib/ai/transform";
 import { formatLabDate, formatRefRange } from "@/utils/bloodwork";
+import { formatBloodworkPhase, phaseBadgeVariant } from "@/lib/bloodwork/phase";
 import { formatReportStatus, canExtractBloodworkMarkers, getBloodworkResultCount, getReportStoragePath, reportHasUploadedFile } from "@/lib/bloodwork/upload";
 import type { BloodworkReportWithResults, ExtractedBloodworkMarker } from "@/types/bloodwork";
 
@@ -322,6 +323,11 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
           </div>
           <div className="flex flex-wrap gap-2">
             <Badge variant="default">{formatReportStatus(report.status)}</Badge>
+            {(report.phase === "cruise" || report.phase === "blast") && (
+              <Badge variant={phaseBadgeVariant(report.phase)}>
+                {formatBloodworkPhase(report.phase)}
+              </Badge>
+            )}
             <Badge variant="primary">{markerCount} markers</Badge>
             {(report.out_of_range_count ?? 0) > 0 && (
               <Badge variant="warning">{report.out_of_range_count} out of range</Badge>

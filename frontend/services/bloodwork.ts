@@ -30,6 +30,11 @@ export { calculateStatus } from "@/lib/bloodwork/status";
 
 const BUCKET = "bloodwork-reports";
 
+function normalizePhase(phase: unknown): import("@/types/bloodwork").BloodworkPhase | null {
+  if (phase === "cruise" || phase === "blast" || phase === "unknown") return phase;
+  return null;
+}
+
 function normalizeReport<T extends BloodworkReport & { bloodwork_results?: { length: number } }>(
   row: T
 ): T {
@@ -48,6 +53,7 @@ function normalizeReport<T extends BloodworkReport & { bloodwork_results?: { len
       : null;
   return {
     ...row,
+    phase: normalizePhase(row.phase),
     bloodwork_results: results as T["bloodwork_results"],
     file_name: row.file_name ?? null,
     file_type: row.file_type ?? null,
@@ -67,10 +73,27 @@ function reportInsertPayload(userId: string, input: Omit<CreateReportInput, "res
     report_name: input.report_name.trim(),
     lab_name: input.lab_name?.trim() || null,
     collection_date: input.collection_date,
+    phase: input.phase,
     notes: input.notes?.trim() || null,
     file_name: input.file_name ?? null,
     file_type: input.file_type ?? null,
     status: input.status ?? "uploaded",
+  };
+}
+
+function buildDashboardStats(enriched: BloodworkReportWithResults[]): BloodworkDashboardStats {
+  const latestReport = enriched[0] ?? null;
+  const latestCruiseReport = enriched.find((r) => r.phase === "cruise") ?? null;
+  const latestBlastReport = enriched.find((r) => r.phase === "blast") ?? null;
+
+  return {
+    totalReports: enriched.length,
+    latestReport,
+    previousReports: enriched.slice(1),
+    totalOutOfRange: latestReport?.out_of_range_count ?? 0,
+    latestCruiseReport,
+    latestBlastReport,
+    hasCruiseBaseline: latestCruiseReport != null,
   };
 }
 
@@ -109,7 +132,15 @@ export async function fetchReportsWithStats(): Promise<{
 
   if (error) {
     return {
-      data: { totalReports: 0, latestReport: null, previousReports: [], totalOutOfRange: 0 },
+      data: {
+        totalReports: 0,
+        latestReport: null,
+        previousReports: [],
+        totalOutOfRange: 0,
+        latestCruiseReport: null,
+        latestBlastReport: null,
+        hasCruiseBaseline: false,
+      },
       error: error.message,
     };
   }
@@ -123,17 +154,8 @@ export async function fetchReportsWithStats(): Promise<{
     return { ...row, bloodwork_results: results, out_of_range_count };
   }).map((row) => normalizeReport(row));
 
-  const latestReport = enriched[0] ?? null;
-  const previousReports = enriched.slice(1);
-  const totalOutOfRange = latestReport?.out_of_range_count ?? 0;
-
   return {
-    data: {
-      totalReports: enriched.length,
-      latestReport,
-      previousReports,
-      totalOutOfRange,
-    },
+    data: buildDashboardStats(enriched),
     error: null,
   };
 }
@@ -365,6 +387,7 @@ export async function updateBloodworkReport(
       lab_name: input.lab_name?.trim() || null,
       collection_date: input.collection_date,
       notes: input.notes?.trim() || null,
+      ...(input.phase !== undefined ? { phase: input.phase } : {}),
       status: input.results.length > 0 ? "complete" : undefined,
     })
     .eq("id", reportId);

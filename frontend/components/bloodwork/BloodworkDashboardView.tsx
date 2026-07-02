@@ -13,6 +13,8 @@ import {
   AlertTriangle,
   ChevronRight,
   Trash2,
+  Anchor,
+  Zap,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button, Card, Badge, Modal } from "@/components/ui";
@@ -30,7 +32,15 @@ export function BloodworkDashboardView() {
   const [deleteName, setDeleteName] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const { latestReport, previousReports, totalReports, totalOutOfRange } = stats;
+  const {
+    latestReport,
+    previousReports,
+    totalReports,
+    totalOutOfRange,
+    latestCruiseReport,
+    latestBlastReport,
+    hasCruiseBaseline,
+  } = stats;
 
   async function confirmDelete() {
     if (!deleteId) return;
@@ -109,6 +119,55 @@ export function BloodworkDashboardView() {
           );
         })}
       </div>
+
+      {/* Cruise / Blast baseline */}
+      <section className="mb-8">
+        <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
+          <Anchor className="h-4 w-4 text-primary" />
+          Cruise vs Blast Tracking
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card variant="gradient" padding="md">
+            <p className="text-xs text-muted uppercase tracking-wider">Latest Cruise</p>
+            <p className="text-lg font-bold text-foreground mt-1">
+              {isLoading ? "…" : formatLabDate(latestCruiseReport?.collection_date ?? null)}
+            </p>
+            <p className="text-xs text-muted mt-1">Maintenance / baseline phase</p>
+          </Card>
+          <Card variant="gradient" padding="md">
+            <p className="text-xs text-muted uppercase tracking-wider">Latest Blast</p>
+            <p className="text-lg font-bold text-foreground mt-1">
+              {isLoading ? "…" : formatLabDate(latestBlastReport?.collection_date ?? null)}
+            </p>
+            <p className="text-xs text-muted mt-1">Higher-dose cycle phase</p>
+          </Card>
+          <Card variant="gradient" padding="md">
+            <p className="text-xs text-muted uppercase tracking-wider">Personal Baseline</p>
+            {isLoading ? (
+              <p className="text-lg font-bold text-foreground mt-1">…</p>
+            ) : hasCruiseBaseline ? (
+              <>
+                <p className="text-lg font-bold text-primary mt-1">Baseline established</p>
+                <p className="text-xs text-muted mt-1">
+                  {latestCruiseReport?.report_name ?? "Cruise bloodwork on file"}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-muted mt-2 leading-relaxed">
+                  Add cruise bloodwork to establish your personal baseline.
+                </p>
+                <Link href="/bloodwork/entry" className="inline-block mt-3">
+                  <Button variant="outline" size="sm">
+                    <Zap className="h-4 w-4" />
+                    Add cruise bloodwork
+                  </Button>
+                </Link>
+              </>
+            )}
+          </Card>
+        </div>
+      </section>
 
       {/* Latest report */}
       <section className="mb-8">
@@ -220,6 +279,9 @@ export function BloodworkDashboardView() {
                     <p className="text-xs text-muted mt-1">
                       {formatLabDate(report.collection_date)}
                       {report.lab_name ? ` · ${report.lab_name}` : ""}
+                      {(report.phase === "cruise" || report.phase === "blast") && (
+                        <span className="ml-1">· {report.phase === "cruise" ? "Cruise" : "Blast"}</span>
+                      )}
                     </p>
                     <p className="text-xs text-muted mt-1">
                       {report.bloodwork_results.length} markers

@@ -8,7 +8,7 @@ import { Button, Card, Input, Select, Textarea } from "@/components/ui";
 import { useBloodMarkers } from "@/hooks/useBloodMarkers";
 import { useAuth } from "@/hooks/useAuth";
 import { createReportWithResults, appendResultsToReport } from "@/services/bloodwork";
-import type { BloodworkResultInput, ExtractedBloodworkMarker } from "@/types/bloodwork";
+import type { BloodworkPhaseInput, BloodworkResultInput, ExtractedBloodworkMarker } from "@/types/bloodwork";
 
 interface ResultRow {
   localId: string;
@@ -55,11 +55,15 @@ function rowsFromExtracted(
 
 export function ManualEntryForm({
   existingReportId,
+  phase,
+  onPhaseRequired,
   initialExtracted,
   reviewNotice,
   onSaved,
 }: {
   existingReportId?: string;
+  phase?: BloodworkPhaseInput | null;
+  onPhaseRequired?: () => void;
   initialExtracted?: ExtractedBloodworkMarker[];
   reviewNotice?: string | null;
   onSaved?: () => void;
@@ -119,6 +123,10 @@ export function ManualEntryForm({
       setError("Please enter a collection date.");
       return;
     }
+    if (!existingReportId && !phase) {
+      setError("Please select whether this bloodwork was taken during cruise or blast.");
+      return;
+    }
 
     const results: BloodworkResultInput[] = [];
     for (const row of rows) {
@@ -167,6 +175,7 @@ export function ManualEntryForm({
       report_name: reportName,
       lab_name: labName,
       collection_date: collectionDate,
+      phase: phase!,
       notes,
       results,
     });

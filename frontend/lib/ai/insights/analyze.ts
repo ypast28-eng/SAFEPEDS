@@ -178,63 +178,215 @@ function scoreOrgan(
   };
 }
 
+function pointsForReport(
+  ctx: InsightsStructuredContext,
+  reportId: string
+): InsightsBloodworkPoint[] {
+  return ctx.historical_bloodwork.filter((p) => p.report_id === reportId);
+}
+
+function latestReportByPhase(
+  ctx: InsightsStructuredContext,
+  phase: "cruise" | "blast"
+): (typeof ctx.bloodwork_reports)[number] | null {
+  return (
+    [...ctx.bloodwork_reports]
+      .filter((r) => r.phase === phase)
+      .sort(
+        (a, b) =>
+          new Date(b.collection_date).getTime() - new Date(a.collection_date).getTime()
+      )[0] ?? null
+  );
+}
+
+function previousReportByPhase(
+  ctx: InsightsStructuredContext,
+  phase: "cruise" | "blast",
+  excludeReportId: string
+): (typeof ctx.bloodwork_reports)[number] | null {
+  return (
+    [...ctx.bloodwork_reports]
+      .filter((r) => r.phase === phase && r.id !== excludeReportId)
+      .sort(
+        (a, b) =>
+          new Date(b.collection_date).getTime() - new Date(a.collection_date).getTime()
+      )[0] ?? null
+  );
+}
+
+function isWorseningMarker(markerName: string, delta: number): boolean {
+  const lower = markerName.toLowerCase();
+  const higherIsBad =
+    lower.includes("alt") ||
+    lower.includes("ast") ||
+    lower.includes("ldl") ||
+    lower.includes("triglycer") ||
+    lower.includes("hematocrit") ||
+    lower.includes("estradiol") ||
+    lower.includes("creatinine");
+  const lowerIsBad = lower.includes("hdl") || lower.includes("egfr");
+  if (higherIsBad) return delta > 0;
+  if (lowerIsBad) return delta < 0;
+  return Math.abs(delta) > 0;
+}
+
 function buildCruiseBlastComparison(
   ctx: InsightsStructuredContext
 ): CruiseBlastComparison | null {
-  const cruise = [...(ctx.current_cycle ? [ctx.current_cycle] : []), ...ctx.previous_cycles].find(
+  const latestReport = ctx.bloodwork_reports[0] ?? null;
+  const currentPhase = latestReport?.phase ?? null;
+
+  const cruiseReport = latestReportByPhase(ctx, "cruise");
+  const blastReport = latestReportByPhase(ctx, "blast");
+
+  const cruiseBlood = cruiseReport ? pointsForReport(ctx, cruiseReport.id) : [];
+  const blastBlood = blastReport ? pointsForReport(ctx, blastReport.id) : [];
+
+  const cruiseCycle = [...(ctx.current_cycle ? [ctx.current_cycle] : []), ...ctx.previous_cycles].find(
     (c) => c.classification === "cruise"
-  );
-  const blast = [...(ctx.current_cycle ? [ctx.current_cycle] : []), ...ctx.previous_cycles].find(
+  ) ?? null;
+  const blastCycle = [...(ctx.current_cycle ? [ctx.current_cycle] : []), ...ctx.previous_cycles].find(
     (c) => c.classification === "blast"
-  );
-  if (!cruise || !blast) return null;
+  ) ?? null;
 
-  const bloodByReport = new Map<string, InsightsBloodworkPoint[]>();
-  for (const point of ctx.historical_bloodwork) {
-    const list = bloodByReport.get(point.report_id) ?? [];
-    list.push(point);
-    bloodByReport.set(point.report_id, list);
-  }
+  if (!cruiseReport && !blastReport && !currentPhase) return null;
 
-  function bloodNearCycle(cycle: InsightsCycleSummary): InsightsBloodworkPoint[] {
-    const start = cycle.start_date ? new Date(cycle.start_date).getTime() : 0;
-    const end = cycle.end_date ? new Date(cycle.end_date).getTime() : Date.now();
-    return ctx.historical_bloodwork.filter((p) => {
-      const t = new Date(p.collection_date).getTime();
-      return t >= start - 14 * 86400000 && t <= end + 14 * 86400000;
-    });
-  }
+  const activeBloodwork =
+    currentPhase === "blast"
+      ? blastBlood
+      : currentPhase === "cruise"
+        ? cruiseBlood
+        : ctx.current_bloodwork;
 
-  const cruiseBlood = bloodNearCycle(cruise);
-  const blastBlood = bloodNearCycle(blast);
-  const markerNames = new Set([
+  const markers_outside_clinical_range = activeBloodwork
+    .filter((p) => p.status === "Low" || p.status === "High")
+    .map((p) => ({
+      marker_name: p.marker_name,
+      value: p.result_value,
+      unit: p.unit,
+      status: p.status ?? "Out of range",
+    }));
+
+  const cruiseByMarker = new Map(cruiseBlood.map((p) => [p.marker_name, p]));
+  const blastByMarker = new Map(blastBlood.map((p) => [p.marker_name, p]));
+
+  const compareMarkers = new Set([
     ...cruiseBlood.map((p) => p.marker_name),
     ...blastBlood.map((p) => p.marker_name),
   ]);
 
-  const differences = [...markerNames].slice(0, 12).map((name) => {
-    const cVal = cruiseBlood.find((p) => p.marker_name === name);
-    const bVal = blastBlood.find((p) => p.marker_name === name);
-    let note = "Educational comparison only — not proof of causation.";
-    if (cVal && bVal && bVal.result_value > cVal.result_value) {
-      note = `Higher during blast phase (${bVal.result_value} vs ${cVal.result_value} ${bVal.unit}). Educational observation only.`;
+  const markers_changed_from_baseline: CruiseBlastComparison["markers_changed_from_baseline"] = [];
+  const markers_worsened_during_blast: CruiseBlastComparison["markers_worsened_during_blast"] = [];
+  const marker_differences: CruiseBlastComparison["marker_differences"] = [];
+
+  for (const name of compareMarkers) {
+    const baseline = cruiseByMarker.get(name);
+    const blast = blastByMarker.get(name);
+    const current = currentPhase === "blast" ? blast : baseline ?? blast;
+
+    if (baseline && current && baseline.result_value !== current.result_value) {
+      const direction =
+        current.result_value > baseline.result_value ? "higher" : "lower";
+      markers_changed_from_baseline.push({
+        marker_name: name,
+        baseline_value: baseline.result_value,
+        current_value: current.result_value,
+        unit: current.unit,
+        note: `${direction} than cruise baseline (${baseline.result_value} → ${current.result_value} ${current.unit}). Educational observation only.`,
+      });
     }
-    return {
-      marker_name: name,
-      cruise_value: cVal?.result_value ?? null,
-      blast_value: bVal?.result_value ?? null,
-      unit: bVal?.unit ?? cVal?.unit ?? "",
-      note,
-    };
-  });
+
+    if (baseline && blast) {
+      const delta = blast.result_value - baseline.result_value;
+      if (delta !== 0) {
+        marker_differences.push({
+          marker_name: name,
+          cruise_value: baseline.result_value,
+          blast_value: blast.result_value,
+          unit: blast.unit,
+          note:
+            delta > 0
+              ? `Higher during blast phase (${blast.result_value} vs ${baseline.result_value} ${blast.unit}). Educational observation only.`
+              : `Lower during blast phase (${blast.result_value} vs ${baseline.result_value} ${blast.unit}). Educational observation only.`,
+        });
+        if (currentPhase === "blast" && isWorseningMarker(name, delta)) {
+          markers_worsened_during_blast.push({
+            marker_name: name,
+            note: `Moved from cruise baseline ${baseline.result_value} to ${blast.result_value} ${blast.unit} during blast phase.`,
+          });
+        }
+      }
+    }
+  }
+
+  const markers_improved_since_last_test: CruiseBlastComparison["markers_improved_since_last_test"] =
+    [];
+  if (latestReport && (currentPhase === "cruise" || currentPhase === "blast")) {
+    const previous = previousReportByPhase(ctx, currentPhase, latestReport.id);
+    if (previous) {
+      const prevPoints = pointsForReport(ctx, previous.id);
+      const latestPoints = pointsForReport(ctx, latestReport.id);
+      for (const current of latestPoints) {
+        const prev = prevPoints.find((p) => p.marker_name === current.marker_name);
+        if (!prev) continue;
+        const delta = current.result_value - prev.result_value;
+        if (isWorseningMarker(current.marker_name, delta)) continue;
+        if (delta !== 0) {
+          markers_improved_since_last_test.push({
+            marker_name: current.marker_name,
+            note: `Improved from ${prev.result_value} (${previous.collection_date}) to ${current.result_value} (${latestReport.collection_date}) ${current.unit}.`,
+          });
+        }
+      }
+    }
+  }
+
+  const educational_explanation =
+    currentPhase === "cruise"
+      ? "Cruise-phase bloodwork is stored as your personal baseline. Some markers may still fall outside standard lab reference ranges — that is common and worth discussing with a qualified healthcare provider."
+      : currentPhase === "blast"
+        ? "During blast phases, some markers may shift compared with cruise baseline due to higher compound exposure, training load, diet, hydration, or lab variability. These patterns are educational observations, not diagnoses."
+        : "Tag bloodwork as cruise (baseline) or blast (cycle) when logging panels to unlock personal baseline comparisons alongside standard reference ranges.";
+
+  const return_to_baseline_note =
+    currentPhase === "blast" && cruiseReport
+      ? `After your blast phase ends, a follow-up cruise panel can help you compare whether markers are returning toward your baseline established on ${cruiseReport.collection_date}.`
+      : currentPhase === "cruise" && blastReport
+        ? `Your latest cruise panel can serve as a return-to-baseline comparison after blast bloodwork from ${blastReport.collection_date}.`
+        : "Log cruise bloodwork after a blast phase to track how markers change when returning to maintenance.";
+
+  let analysis = "";
+  if (currentPhase === "cruise") {
+    analysis = `Current phase: Cruise. This panel is treated as baseline data with ${cruiseBlood.length} marker(s) logged.`;
+  } else if (currentPhase === "blast") {
+    analysis = `Current phase: Blast. Compared against clinical reference ranges${
+      cruiseReport ? ` and cruise baseline from ${cruiseReport.collection_date}` : " (no cruise baseline yet)"
+    }${blastCycle ? ` and logged cycle context (${blastCycle.cycle_name})` : ""}.`;
+  } else {
+    analysis = "Phase not set on latest bloodwork. Select cruise or blast when adding new panels for personalized comparisons.";
+  }
 
   return {
-    cruise_cycle: cruise,
-    blast_cycle: blast,
+    current_phase: currentPhase,
+    latest_cruise_report: cruiseReport
+      ? { report_name: cruiseReport.report_name, collection_date: cruiseReport.collection_date }
+      : null,
+    latest_blast_report: blastReport
+      ? { report_name: blastReport.report_name, collection_date: blastReport.collection_date }
+      : null,
+    has_cruise_baseline: cruiseReport != null,
+    markers_outside_clinical_range,
+    markers_changed_from_baseline: markers_changed_from_baseline.slice(0, 12),
+    markers_worsened_during_blast: markers_worsened_during_blast.slice(0, 8),
+    markers_improved_since_last_test: markers_improved_since_last_test.slice(0, 8),
+    educational_explanation,
+    return_to_baseline_note,
+    cruise_cycle: cruiseCycle,
+    blast_cycle: blastCycle,
     cruise_bloodwork: cruiseBlood,
     blast_bloodwork: blastBlood,
-    marker_differences: differences,
-    analysis: `Educational comparison between cruise (${cruise.total_weekly_mg} mg/wk total) and blast (${blast.total_weekly_mg} mg/wk total) phases using bloodwork collected near each cycle window.`,
+    marker_differences: marker_differences.slice(0, 12),
+    analysis,
   };
 }
 

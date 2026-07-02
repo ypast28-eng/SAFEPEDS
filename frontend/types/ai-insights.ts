@@ -55,6 +55,7 @@ export interface InsightsBloodworkPoint {
   collection_date: string;
   report_id: string;
   report_name: string;
+  phase: "cruise" | "blast" | "unknown" | null;
 }
 
 export interface InsightsStructuredContext {
@@ -67,6 +68,7 @@ export interface InsightsStructuredContext {
     collection_date: string;
     lab_name: string | null;
     marker_count: number;
+    phase: "cruise" | "blast" | "unknown" | null;
   }>;
   current_cycle: InsightsCycleSummary | null;
   previous_cycles: InsightsCycleSummary[];
@@ -117,8 +119,35 @@ export interface MarkerTrendTimeline {
 }
 
 export interface CruiseBlastComparison {
-  cruise_cycle: InsightsCycleSummary;
-  blast_cycle: InsightsCycleSummary;
+  current_phase: "cruise" | "blast" | "unknown" | null;
+  latest_cruise_report: { report_name: string; collection_date: string } | null;
+  latest_blast_report: { report_name: string; collection_date: string } | null;
+  has_cruise_baseline: boolean;
+  markers_outside_clinical_range: Array<{
+    marker_name: string;
+    value: number;
+    unit: string;
+    status: string;
+  }>;
+  markers_changed_from_baseline: Array<{
+    marker_name: string;
+    baseline_value: number | null;
+    current_value: number | null;
+    unit: string;
+    note: string;
+  }>;
+  markers_worsened_during_blast: Array<{
+    marker_name: string;
+    note: string;
+  }>;
+  markers_improved_since_last_test: Array<{
+    marker_name: string;
+    note: string;
+  }>;
+  educational_explanation: string;
+  return_to_baseline_note: string;
+  cruise_cycle: InsightsCycleSummary | null;
+  blast_cycle: InsightsCycleSummary | null;
   cruise_bloodwork: InsightsBloodworkPoint[];
   blast_bloodwork: InsightsBloodworkPoint[];
   marker_differences: Array<{

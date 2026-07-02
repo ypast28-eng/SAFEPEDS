@@ -17,12 +17,18 @@ export interface BloodMarker {
 /** Bloodwork report processing status */
 export type BloodworkReportStatus = "uploaded" | "pending_review" | "complete";
 
+/** Cruise = maintenance baseline; blast = higher-dose cycle phase */
+export type BloodworkPhase = "cruise" | "blast" | "unknown";
+export type BloodworkPhaseInput = "cruise" | "blast";
+
 export interface BloodworkReport {
   id: string;
   user_id: string;
   report_name: string;
   lab_name: string | null;
   collection_date: string;
+  /** Null on legacy reports uploaded before phase tracking */
+  phase: BloodworkPhase | null;
   file_name: string | null;
   file_type: string | null;
   file_size: number | null;
@@ -69,6 +75,9 @@ export interface BloodworkDashboardStats {
   latestReport: BloodworkReportWithResults | null;
   previousReports: BloodworkReportWithResults[];
   totalOutOfRange: number;
+  latestCruiseReport: BloodworkReportWithResults | null;
+  latestBlastReport: BloodworkReportWithResults | null;
+  hasCruiseBaseline: boolean;
 }
 
 /** Manual entry line item */
@@ -92,6 +101,7 @@ export interface UpdateBloodworkReportInput {
   lab_name?: string | null;
   collection_date: string;
   notes?: string | null;
+  phase?: BloodworkPhaseInput | null;
   results: EditableBloodworkResultInput[];
   deleted_result_ids?: string[];
 }
@@ -114,6 +124,7 @@ export interface CreateReportInput {
   report_name: string;
   lab_name?: string;
   collection_date: string;
+  phase: BloodworkPhaseInput;
   notes?: string;
   results: BloodworkResultInput[];
   file_name?: string;

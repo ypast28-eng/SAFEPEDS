@@ -23,7 +23,7 @@ export function generateInsightsFallback(ctx: InsightsStructuredContext): AiInsi
       long_term_trends: `Analyzed ${ctx.historical_bloodwork.length} historical marker data points across all logged panels.`,
       recommendations: [
         "Repeat key markers on a schedule discussed with your healthcare provider.",
-        "Compare cruise and blast phase bloodwork when both are logged.",
+        "Tag bloodwork as cruise (baseline) or blast (cycle) when logging panels for personalized comparisons.",
         "Use educational compound associations as discussion prompts, not diagnoses.",
       ],
     },
