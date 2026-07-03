@@ -45,18 +45,31 @@ export interface BloodworkReport {
 export interface BloodworkResult {
   id: string;
   report_id: string;
-  marker_name: string;
-  category: string;
-  result_value: number;
-  unit: string;
-  reference_low: number | null;
-  reference_high: number | null;
-  status: BloodworkStatus | null;
-  result_text: string | null;
+  user_id?: string;
+  panel: string;
+  marker: string;
+  result: string | null;
+  numeric_value: number;
   comparator: string | null;
   flag: string | null;
+  unit: string;
   reference_range: string | null;
+  range_low: number | null;
+  range_high: number | null;
+  status: BloodworkStatus | null;
   created_at: string;
+  /** Alias for marker — kept for existing UI and APIs */
+  marker_name: string;
+  /** Alias for panel */
+  category: string;
+  /** Alias for numeric_value */
+  result_value: number;
+  /** Alias for result */
+  result_text: string | null;
+  /** Alias for range_low */
+  reference_low: number | null;
+  /** Alias for range_high */
+  reference_high: number | null;
 }
 
 export interface BloodworkHistoryPoint {
@@ -94,6 +107,12 @@ export interface BloodworkResultInput {
   reference_low: number | null;
   reference_high: number | null;
   status?: BloodworkStatus | null;
+  panel?: string;
+  marker?: string;
+  result?: string | null;
+  numeric_value?: number;
+  range_low?: number | null;
+  range_high?: number | null;
   result_text?: string | null;
   comparator?: string | null;
   flag?: string | null;

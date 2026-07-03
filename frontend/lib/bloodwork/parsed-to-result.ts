@@ -27,6 +27,12 @@ export function parsedMarkersToInputs(
   const matched = matchExtractedMarkers(raw, catalog);
 
   return matched.map((m) => ({
+    panel: m.category,
+    marker: m.marker_name,
+    result: m.result_text ?? String(m.result_value),
+    numeric_value: m.result_value,
+    range_low: m.reference_low,
+    range_high: m.reference_high,
     marker_name: m.marker_name,
     category: m.category,
     result_value: m.result_value,

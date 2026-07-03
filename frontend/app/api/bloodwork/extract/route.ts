@@ -199,6 +199,12 @@ export async function POST(request: Request) {
     }
 
     const resultInputs = markers.map((m) => ({
+      panel: m.category,
+      marker: m.marker_name,
+      result: m.result_text ?? String(m.result_value),
+      numeric_value: m.result_value,
+      range_low: m.reference_low,
+      range_high: m.reference_high,
       marker_name: m.marker_name,
       category: m.category,
       result_value: m.result_value,
@@ -215,7 +221,7 @@ export async function POST(request: Request) {
     await supabase.from("bloodwork_results").delete().eq("report_id", reportId);
 
     if (resultInputs.length > 0) {
-      const rows = resultInputs.map((r) => toBloodworkResultRow(reportId, r));
+      const rows = resultInputs.map((r) => toBloodworkResultRow(reportId, user.id, r));
       const { error: insertError } = await supabase.from("bloodwork_results").insert(rows);
       if (insertError) {
         console.error("[bloodwork/extract] failed to save markers", {
