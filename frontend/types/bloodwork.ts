@@ -37,6 +37,7 @@ export interface BloodworkReport {
   uploaded_file_url: string | null;
   status: BloodworkReportStatus;
   notes: string | null;
+  extraction_snapshot?: StructuredBloodworkMarker[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -51,6 +52,10 @@ export interface BloodworkResult {
   reference_low: number | null;
   reference_high: number | null;
   status: BloodworkStatus | null;
+  result_text: string | null;
+  comparator: string | null;
+  flag: string | null;
+  reference_range: string | null;
   created_at: string;
 }
 
@@ -89,6 +94,10 @@ export interface BloodworkResultInput {
   reference_low: number | null;
   reference_high: number | null;
   status?: BloodworkStatus | null;
+  result_text?: string | null;
+  comparator?: string | null;
+  flag?: string | null;
+  reference_range?: string | null;
 }
 
 /** Editable marker row — existing results include `id` */
@@ -113,11 +122,28 @@ export interface ExtractedBloodworkMarker extends BloodworkResultInput {
   matched: boolean;
 }
 
+export interface StructuredBloodworkMarker {
+  panel: string;
+  marker: string;
+  result: string;
+  numeric_value: number | null;
+  comparator: string | null;
+  flag: string | null;
+  unit: string;
+  reference_range: string;
+  range_low: number | null;
+  range_high: number | null;
+  status: "low" | "normal" | "high" | "unknown";
+}
+
 export interface BloodworkExtractionResult {
   markers: ExtractedBloodworkMarker[];
+  structured_markers: StructuredBloodworkMarker[];
   warnings: string[];
   extractedCount: number;
   matchedCount: number;
+  saved: boolean;
+  parser: "pdf" | "openai";
 }
 
 export interface CreateReportInput {

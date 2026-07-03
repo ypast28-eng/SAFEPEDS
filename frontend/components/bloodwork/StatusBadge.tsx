@@ -13,7 +13,11 @@ interface StatusBadgeProps {
 
 export function StatusBadge({ status }: StatusBadgeProps) {
   if (!status) {
-    return <Badge variant="default">—</Badge>;
+    return (
+      <Badge variant="default" dot>
+        Unknown
+      </Badge>
+    );
   }
   return (
     <Badge variant={VARIANT_MAP[status]} dot>

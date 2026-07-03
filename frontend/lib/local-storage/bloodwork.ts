@@ -101,7 +101,14 @@ export function localCreateReportWithResults(
     unit: r.unit,
     reference_low: r.reference_low,
     reference_high: r.reference_high,
-    status: calculateStatus(r.result_value, r.reference_low, r.reference_high),
+    status:
+      r.status !== undefined
+        ? r.status
+        : calculateStatus(r.result_value, r.reference_low, r.reference_high),
+    result_text: r.result_text ?? null,
+    comparator: r.comparator ?? null,
+    flag: r.flag ?? null,
+    reference_range: r.reference_range ?? null,
     created_at: ts,
   }));
 
@@ -148,7 +155,14 @@ export function localAppendResultsToReport(
     unit: r.unit,
     reference_low: r.reference_low,
     reference_high: r.reference_high,
-    status: calculateStatus(r.result_value, r.reference_low, r.reference_high),
+    status:
+      r.status !== undefined
+        ? r.status
+        : calculateStatus(r.result_value, r.reference_low, r.reference_high),
+    result_text: r.result_text ?? null,
+    comparator: r.comparator ?? null,
+    flag: r.flag ?? null,
+    reference_range: r.reference_range ?? null,
     created_at: ts,
   }));
 
@@ -197,6 +211,10 @@ export function localUpdateReportWithResults(
       reference_low: patch.reference_low,
       reference_high: patch.reference_high,
       status,
+      result_text: patch.result_text ?? existing.result_text ?? null,
+      comparator: patch.comparator ?? existing.comparator ?? null,
+      flag: patch.flag ?? existing.flag ?? null,
+      reference_range: patch.reference_range ?? existing.reference_range ?? null,
     };
   });
 
@@ -215,6 +233,10 @@ export function localUpdateReportWithResults(
         r.status !== undefined
           ? r.status
           : calculateStatus(r.result_value, r.reference_low, r.reference_high),
+      result_text: r.result_text ?? null,
+      comparator: r.comparator ?? null,
+      flag: r.flag ?? null,
+      reference_range: r.reference_range ?? null,
       created_at: ts,
     }));
 

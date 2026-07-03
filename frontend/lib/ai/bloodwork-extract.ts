@@ -145,9 +145,21 @@ export async function extractMarkersFromFile(
   }
 
   if (mimeType === "application/pdf" || fileName.toLowerCase().endsWith(".pdf")) {
-    const pdfParse = (await import("pdf-parse")).default;
-    const parsed = await pdfParse(buffer);
-    return extractMarkersFromPdfText(parsed.text ?? "");
+    const { parseBloodworkPdfBuffer } = await import("@/lib/bloodwork/parseBloodworkPdf");
+    const parsed = await parseBloodworkPdfBuffer(buffer);
+    return parsed.map((m) => ({
+      name: m.marker,
+      value: m.numeric_value ?? 0,
+      unit: m.unit,
+      reference_low: m.range_low,
+      reference_high: m.range_high,
+      panel: m.panel,
+      result_text: m.result,
+      comparator: m.comparator,
+      flag: m.flag,
+      reference_range: m.reference_range,
+      parsed_status: m.status,
+    }));
   }
 
   throw new Error(`Unsupported file type: ${mimeType || "unknown"}`);
