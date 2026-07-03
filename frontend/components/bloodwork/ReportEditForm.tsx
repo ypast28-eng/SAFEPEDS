@@ -7,6 +7,7 @@ import { BloodworkPhaseSelector } from "./BloodworkPhaseSelector";
 import { useBloodMarkers } from "@/hooks/useBloodMarkers";
 import { updateBloodworkReport } from "@/services/bloodwork";
 import { calculateStatus } from "@/lib/bloodwork/status";
+import { resolveBloodworkPhase } from "@/lib/bloodwork/phase";
 import type {
   BloodworkPhaseInput,
   BloodworkReportWithResults,
@@ -83,9 +84,7 @@ export function ReportEditForm({ report, onCancel, onSaved }: ReportEditFormProp
   const [labName, setLabName] = useState(report.lab_name ?? "");
   const [collectionDate, setCollectionDate] = useState(report.collection_date);
   const [notes, setNotes] = useState(report.notes ?? "");
-  const [phase, setPhase] = useState<BloodworkPhaseInput | null>(
-    report.phase === "cruise" || report.phase === "blast" ? report.phase : null
-  );
+  const [phase, setPhase] = useState<BloodworkPhaseInput>(resolveBloodworkPhase(report.phase));
   const [rows, setRows] = useState<EditResultRow[]>(() => rowsFromReport(report, []));
   const [deletedResultIds, setDeletedResultIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -145,7 +144,7 @@ export function ReportEditForm({ report, onCancel, onSaved }: ReportEditFormProp
       return;
     }
     if (!phase) {
-      setError("Please select whether this bloodwork was taken during cruise or blast.");
+      setError("Please select a bloodwork phase.");
       return;
     }
 
@@ -189,7 +188,7 @@ export function ReportEditForm({ report, onCancel, onSaved }: ReportEditFormProp
       lab_name: labName || null,
       collection_date: collectionDate,
       notes: notes || null,
-      phase,
+      phase: resolveBloodworkPhase(phase),
       results,
       deleted_result_ids: deletedResultIds,
     });

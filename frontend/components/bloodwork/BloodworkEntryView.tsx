@@ -11,6 +11,7 @@ import { UploadReportForm } from "./UploadReportForm";
 import { BloodworkPhaseSelector } from "./BloodworkPhaseSelector";
 import { cn } from "@/utils/cn";
 import type { BloodworkPhaseInput } from "@/types/bloodwork";
+import { DEFAULT_BLOODWORK_PHASE } from "@/lib/bloodwork/phase";
 
 type Tab = "manual" | "upload";
 
@@ -18,8 +19,7 @@ export function BloodworkEntryView() {
   const searchParams = useSearchParams();
   const reportId = searchParams.get("reportId");
   const [tab, setTab] = useState<Tab>("manual");
-  const [phase, setPhase] = useState<BloodworkPhaseInput | null>(null);
-  const [phaseError, setPhaseError] = useState<string | null>(null);
+  const [phase, setPhase] = useState<BloodworkPhaseInput>(DEFAULT_BLOODWORK_PHASE);
 
   if (reportId) {
     return (
@@ -51,14 +51,7 @@ export function BloodworkEntryView() {
       />
 
       <Card variant="elevated" padding="lg" className="mb-6">
-        <BloodworkPhaseSelector
-          value={phase}
-          onChange={(next) => {
-            setPhase(next);
-            setPhaseError(null);
-          }}
-          error={phaseError}
-        />
+        <BloodworkPhaseSelector value={phase} onChange={setPhase} />
       </Card>
 
       <div className="flex gap-2 mb-6 p-1 rounded-xl bg-surface border border-border/50 w-fit">
@@ -91,19 +84,9 @@ export function BloodworkEntryView() {
       </div>
 
       {tab === "manual" ? (
-        <ManualEntryForm
-          phase={phase}
-          onPhaseRequired={() =>
-            setPhaseError("Please select cruise or blast before saving your report.")
-          }
-        />
+        <ManualEntryForm phase={phase} />
       ) : (
-        <UploadReportForm
-          phase={phase}
-          onPhaseRequired={() =>
-            setPhaseError("Please select cruise or blast before uploading your report.")
-          }
-        />
+        <UploadReportForm phase={phase} />
       )}
     </div>
   );

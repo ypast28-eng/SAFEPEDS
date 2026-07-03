@@ -21,6 +21,7 @@ import { Button, Card, Badge, Modal } from "@/components/ui";
 import { useBloodworkDashboard } from "@/hooks/useBloodworkDashboard";
 import { StatusBadge } from "./StatusBadge";
 import { formatLabDate } from "@/utils/bloodwork";
+import { formatBloodworkPhase } from "@/lib/bloodwork/phase";
 import { useState } from "react";
 import { cn } from "@/utils/cn";
 import { reportHasUploadedFile } from "@/lib/bloodwork/upload";
@@ -279,8 +280,11 @@ export function BloodworkDashboardView() {
                     <p className="text-xs text-muted mt-1">
                       {formatLabDate(report.collection_date)}
                       {report.lab_name ? ` · ${report.lab_name}` : ""}
-                      {(report.phase === "cruise" || report.phase === "blast") && (
-                        <span className="ml-1">· {report.phase === "cruise" ? "Cruise" : "Blast"}</span>
+                      {(report.phase === "cruise" ||
+                        report.phase === "blast" ||
+                        report.phase === "off" ||
+                        report.phase === "unknown") && (
+                        <span className="ml-1">· {formatBloodworkPhase(report.phase)}</span>
                       )}
                     </p>
                     <p className="text-xs text-muted mt-1">

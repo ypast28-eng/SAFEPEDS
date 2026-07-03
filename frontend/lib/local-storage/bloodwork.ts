@@ -1,4 +1,5 @@
 import { calculateStatus } from "@/lib/bloodwork/status";
+import { resolveBloodworkPhase } from "@/lib/bloodwork/phase";
 import { readJson, writeJson } from "@/lib/local-storage/store";
 import {
   LS_BLOODWORK_HISTORY_KEY,
@@ -118,7 +119,7 @@ export function localCreateReportWithResults(
     report_name: input.report_name.trim(),
     lab_name: input.lab_name?.trim() || null,
     collection_date: input.collection_date,
-    phase: input.phase,
+    phase: resolveBloodworkPhase(input.phase),
     file_name: input.file_name ?? null,
     file_type: input.file_type ?? null,
     file_size: null,
@@ -246,7 +247,7 @@ export function localUpdateReportWithResults(
     lab_name: input.lab_name?.trim() || null,
     collection_date: input.collection_date,
     notes: input.notes?.trim() || null,
-    ...(input.phase !== undefined ? { phase: input.phase } : {}),
+    ...(input.phase !== undefined ? { phase: resolveBloodworkPhase(input.phase) } : {}),
     updated_at: ts,
     status: input.results.length > 0 || updatedExisting.length > 0 ? "complete" : reports[idx].status,
     bloodwork_results: [...updatedExisting, ...newResults].sort((a, b) =>

@@ -35,6 +35,7 @@ import type {
   BloodworkReport,
   StructuredBloodworkMarker,
 } from "@/types/bloodwork";
+import { resolveBloodworkPhase } from "@/lib/bloodwork/phase";
 import { cn } from "@/utils/cn";
 
 type UploadStep = "form" | "uploaded" | "preview" | "manual";
@@ -51,10 +52,8 @@ function isPdfFile(file: File | BloodworkReport): boolean {
 
 export function UploadReportForm({
   phase,
-  onPhaseRequired,
 }: {
-  phase: BloodworkPhaseInput | null;
-  onPhaseRequired?: () => void;
+  phase: BloodworkPhaseInput;
 }) {
   const router = useRouter();
   const { user } = useAuth();
@@ -173,11 +172,6 @@ export function UploadReportForm({
       setError("Please enter a collection date.");
       return;
     }
-    if (!phase) {
-      onPhaseRequired?.();
-      setError("Please select cruise or blast before uploading.");
-      return;
-    }
     if (!file) {
       setError("Please choose a PDF, JPG, or PNG file.");
       return;
@@ -191,7 +185,7 @@ export function UploadReportForm({
           report_name: reportName,
           lab_name: labName,
           collection_date: collectionDate,
-          phase,
+          phase: resolveBloodworkPhase(phase),
           notes,
         },
         file

@@ -56,7 +56,7 @@ export interface InsightsBloodworkPoint {
   collection_date: string;
   report_id: string;
   report_name: string;
-  phase: "cruise" | "blast" | "unknown" | null;
+  phase: "cruise" | "blast" | "off" | "unknown" | null;
   result_text: string | null;
   reference_range: string | null;
   flag: string | null;
@@ -73,7 +73,7 @@ export interface InsightsStructuredContext {
     collection_date: string;
     lab_name: string | null;
     marker_count: number;
-    phase: "cruise" | "blast" | "unknown" | null;
+    phase: "cruise" | "blast" | "off" | "unknown" | null;
     structured_markers?: StructuredBloodworkMarker[] | null;
   }>;
   current_cycle: InsightsCycleSummary | null;
@@ -125,7 +125,7 @@ export interface MarkerTrendTimeline {
 }
 
 export interface CruiseBlastComparison {
-  current_phase: "cruise" | "blast" | "unknown" | null;
+  current_phase: "cruise" | "blast" | "off" | "unknown" | null;
   latest_cruise_report: { report_name: string; collection_date: string } | null;
   latest_blast_report: { report_name: string; collection_date: string } | null;
   has_cruise_baseline: boolean;

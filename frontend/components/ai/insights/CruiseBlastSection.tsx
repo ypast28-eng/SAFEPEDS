@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, Badge } from "@/components/ui";
-import { formatBloodworkPhase } from "@/lib/bloodwork/phase";
+import { formatBloodworkPhase, phaseBadgeVariant } from "@/lib/bloodwork/phase";
 import type { CruiseBlastComparison } from "@/types/ai-insights";
 
 function MarkerList({
@@ -76,8 +76,11 @@ export function CruiseBlastSection({ comparison }: { comparison: CruiseBlastComp
       <Card variant="elevated" padding="md">
         <div className="flex flex-wrap items-center gap-2 mb-3">
           <span className="text-sm text-muted">Current phase:</span>
-          {current_phase === "cruise" || current_phase === "blast" ? (
-            <Badge variant={current_phase === "cruise" ? "primary" : "warning"}>
+          {current_phase === "cruise" ||
+          current_phase === "blast" ||
+          current_phase === "off" ||
+          current_phase === "unknown" ? (
+            <Badge variant={phaseBadgeVariant(current_phase)}>
               {formatBloodworkPhase(current_phase)}
             </Badge>
           ) : (
