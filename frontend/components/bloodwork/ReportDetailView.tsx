@@ -357,7 +357,10 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
           </div>
           <div className="flex flex-wrap gap-2">
             <Badge variant="default">{formatReportStatus(report.status)}</Badge>
-            {(report.phase === "cruise" || report.phase === "blast") && (
+            {(report.phase === "cruise" ||
+              report.phase === "blast" ||
+              report.phase === "off" ||
+              report.phase === "unknown") && (
               <Badge variant={phaseBadgeVariant(report.phase)}>
                 {formatBloodworkPhase(report.phase)}
               </Badge>

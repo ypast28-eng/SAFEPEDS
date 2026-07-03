@@ -69,7 +69,10 @@ function flattenBloodwork(reports: BloodworkReportWithResults[]) {
       report_id: report.id,
       report_name: report.report_name,
       phase:
-        report.phase === "cruise" || report.phase === "blast" || report.phase === "unknown"
+        report.phase === "cruise" ||
+        report.phase === "blast" ||
+        report.phase === "off" ||
+        report.phase === "unknown"
           ? report.phase
           : null,
       result_text: r.result_text ?? null,
@@ -185,7 +188,12 @@ export async function buildInsightsContext(
       lab_name: r.lab_name,
       marker_count: r.bloodwork_results?.length ?? 0,
       phase:
-        r.phase === "cruise" || r.phase === "blast" || r.phase === "unknown" ? r.phase : null,
+        r.phase === "cruise" ||
+        r.phase === "blast" ||
+        r.phase === "off" ||
+        r.phase === "unknown"
+          ? r.phase
+          : null,
       structured_markers:
         (r as BloodworkReportWithResults & { extraction_snapshot?: StructuredBloodworkMarker[] | null })
           .extraction_snapshot ?? null,

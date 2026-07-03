@@ -17,9 +17,9 @@ export interface BloodMarker {
 /** Bloodwork report processing status */
 export type BloodworkReportStatus = "uploaded" | "pending_review" | "complete";
 
-/** Cruise = maintenance baseline; blast = higher-dose cycle phase */
-export type BloodworkPhase = "cruise" | "blast" | "unknown";
-export type BloodworkPhaseInput = "cruise" | "blast";
+/** Cruise = maintenance baseline; blast = higher-dose cycle; off = between phases */
+export type BloodworkPhase = "cruise" | "blast" | "off" | "unknown";
+export type BloodworkPhaseInput = BloodworkPhase;
 
 export interface BloodworkReport {
   id: string;
@@ -150,7 +150,7 @@ export interface CreateReportInput {
   report_name: string;
   lab_name?: string;
   collection_date: string;
-  phase: BloodworkPhaseInput;
+  phase?: BloodworkPhaseInput;
   notes?: string;
   results: BloodworkResultInput[];
   file_name?: string;

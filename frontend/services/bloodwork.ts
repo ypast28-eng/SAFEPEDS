@@ -1,4 +1,5 @@
 import { calculateStatus } from "@/lib/bloodwork/status";
+import { resolveBloodworkPhase } from "@/lib/bloodwork/phase";
 import { toBloodworkResultRow } from "@/lib/bloodwork/result-row";
 import { isSupabaseEnvConfigured } from "@/lib/supabase/env";
 import { tryCreateClient } from "@/lib/supabase/client";
@@ -32,7 +33,9 @@ export { calculateStatus } from "@/lib/bloodwork/status";
 const BUCKET = "bloodwork-reports";
 
 function normalizePhase(phase: unknown): import("@/types/bloodwork").BloodworkPhase | null {
-  if (phase === "cruise" || phase === "blast" || phase === "unknown") return phase;
+  if (phase === "cruise" || phase === "blast" || phase === "off" || phase === "unknown") {
+    return phase;
+  }
   return null;
 }
 
@@ -74,7 +77,7 @@ function reportInsertPayload(userId: string, input: Omit<CreateReportInput, "res
     report_name: input.report_name.trim(),
     lab_name: input.lab_name?.trim() || null,
     collection_date: input.collection_date,
-    phase: input.phase,
+    phase: resolveBloodworkPhase(input.phase),
     notes: input.notes?.trim() || null,
     file_name: input.file_name ?? null,
     file_type: input.file_type ?? null,
@@ -367,7 +370,9 @@ export async function updateBloodworkReport(
       lab_name: input.lab_name?.trim() || null,
       collection_date: input.collection_date,
       notes: input.notes?.trim() || null,
-      ...(input.phase !== undefined ? { phase: input.phase } : {}),
+      ...(input.phase !== undefined
+        ? { phase: resolveBloodworkPhase(input.phase) }
+        : {}),
       status: input.results.length > 0 ? "complete" : undefined,
     })
     .eq("id", reportId);
