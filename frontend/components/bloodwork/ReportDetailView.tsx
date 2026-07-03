@@ -18,6 +18,7 @@ import {
 import { Button, Card, Badge } from "@/components/ui";
 import { Table } from "@/components/ui/Table";
 import { ManualEntryForm } from "./ManualEntryForm";
+import { BloodworkExtractionPreview } from "./BloodworkExtractionPreview";
 import { ReportEditForm } from "./ReportEditForm";
 import {
   extractMarkersFromReport,
@@ -32,7 +33,7 @@ import { profileToAiContext, reportToAiContext } from "@/lib/ai/transform";
 import { formatLabDate, formatRefRange } from "@/utils/bloodwork";
 import { formatBloodworkPhase, phaseBadgeVariant } from "@/lib/bloodwork/phase";
 import { formatReportStatus, canExtractBloodworkMarkers, getBloodworkResultCount, getReportStoragePath, reportHasUploadedFile } from "@/lib/bloodwork/upload";
-import type { BloodworkReportWithResults, ExtractedBloodworkMarker } from "@/types/bloodwork";
+import type { BloodworkReportWithResults, ExtractedBloodworkMarker, StructuredBloodworkMarker } from "@/types/bloodwork";
 
 interface ReportDetailViewProps {
   reportId: string;
@@ -52,6 +53,10 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
   const [extractError, setExtractError] = useState<string | null>(null);
   const [extractNotice, setExtractNotice] = useState<string | null>(null);
   const [extractedMarkers, setExtractedMarkers] = useState<ExtractedBloodworkMarker[] | null>(null);
+  const [structuredMarkers, setStructuredMarkers] = useState<StructuredBloodworkMarker[]>([]);
+  const [extractedCount, setExtractedCount] = useState(0);
+  const [parser, setParser] = useState<"pdf" | "openai">("pdf");
+  const [showExtractionPreview, setShowExtractionPreview] = useState(false);
   const [showReview, setShowReview] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
@@ -116,6 +121,18 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
         return;
       }
 
+      if (outcome.data.saved) {
+        setStructuredMarkers(outcome.data.structured_markers);
+        setExtractedCount(outcome.data.extractedCount);
+        setParser(outcome.data.parser);
+        setShowExtractionPreview(true);
+        setExtractNotice(
+          `Extracted and saved ${outcome.data.extractedCount} marker(s) from your report.`
+        );
+        await loadReport();
+        return;
+      }
+
       setExtractedMarkers(outcome.data.markers);
       setExtractNotice(
         [
@@ -153,9 +170,9 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
     id: r.id,
     marker: r.marker_name,
     category: r.category,
-    result: `${r.result_value}`,
+    result: r.result_text ?? `${r.result_value}`,
     unit: r.unit,
-    reference: formatRefRange(r.reference_low, r.reference_high, r.unit),
+    reference: r.reference_range ?? formatRefRange(r.reference_low, r.reference_high, r.unit),
     status: r.status,
     date: formatLabDate(report.collection_date),
   }));
@@ -302,6 +319,23 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
         >
           {saveNotice}
         </div>
+      )}
+
+      {extractNotice && (
+        <div
+          role="status"
+          className="rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-foreground"
+        >
+          {extractNotice}
+        </div>
+      )}
+
+      {showExtractionPreview && structuredMarkers.length > 0 && (
+        <BloodworkExtractionPreview
+          markers={structuredMarkers}
+          extractedCount={extractedCount}
+          parser={parser}
+        />
       )}
 
       <Card variant="elevated" padding="lg">

@@ -6,6 +6,9 @@ import {
   OPENAI_SETUP_INSTRUCTIONS,
 } from "@/lib/ai/extraction-config";
 import { matchExtractedMarkers } from "@/lib/bloodwork/match-markers";
+import { buildExtractionSnapshot, parsedMarkerToRaw } from "@/lib/bloodwork/parsed-to-result";
+import { parseBloodworkPdfBuffer } from "@/lib/bloodwork/parseBloodworkPdf";
+import { toBloodworkResultRow } from "@/lib/bloodwork/result-row";
 import { getReportStoragePath } from "@/lib/bloodwork/upload";
 import type { BloodMarker } from "@/types/bloodwork";
 
@@ -65,25 +68,19 @@ async function downloadReportFile(
   };
 }
 
+function isPdf(mimeType: string, fileName: string) {
+  return mimeType === "application/pdf" || fileName.toLowerCase().endsWith(".pdf");
+}
+
 export async function GET() {
   return NextResponse.json({
     configured: isOpenAiExtractionConfigured(),
+    pdfParserAvailable: true,
     setupInstructions: isOpenAiExtractionConfigured() ? null : OPENAI_SETUP_INSTRUCTIONS,
   });
 }
 
 export async function POST(request: Request) {
-  if (!isOpenAiExtractionConfigured()) {
-    return NextResponse.json(
-      {
-        code: "setup_required",
-        error: "Bloodwork extraction is not configured",
-        message: OPENAI_SETUP_INSTRUCTIONS,
-      },
-      { status: 503 }
-    );
-  }
-
   let reportId: string;
   try {
     const body = (await request.json()) as { reportId?: string };
@@ -135,8 +132,18 @@ export async function POST(request: Request) {
     }
 
     const { buffer, mimeType, fileName } = downloaded;
+    const pdf = isPdf(mimeType, fileName);
 
-    const rawMarkers = await extractMarkersFromFile(buffer, mimeType, fileName);
+    if (!pdf && !isOpenAiExtractionConfigured()) {
+      return NextResponse.json(
+        {
+          code: "setup_required",
+          error: "Bloodwork extraction is not configured",
+          message: OPENAI_SETUP_INSTRUCTIONS,
+        },
+        { status: 503 }
+      );
+    }
 
     const { data: catalog, error: catalogError } = await supabase
       .from("blood_markers")
@@ -147,30 +154,128 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: catalogError.message }, { status: 500 });
     }
 
+    let rawMarkers;
+    let parser: "pdf" | "openai" = "openai";
+    let structuredSnapshot;
+
+    if (pdf) {
+      const parsed = await parseBloodworkPdfBuffer(buffer);
+      rawMarkers = parsed.map(parsedMarkerToRaw);
+      structuredSnapshot = buildExtractionSnapshot(parsed);
+      parser = "pdf";
+    } else {
+      rawMarkers = await extractMarkersFromFile(buffer, mimeType, fileName);
+      structuredSnapshot = rawMarkers.map((m) => ({
+        panel: "General",
+        marker: m.name,
+        result: String(m.value),
+        numeric_value: m.value,
+        comparator: null,
+        flag: null,
+        unit: m.unit,
+        reference_range:
+          m.reference_low != null && m.reference_high != null
+            ? `${m.reference_low} - ${m.reference_high}`
+            : m.reference_high != null
+              ? `<${m.reference_high}`
+              : m.reference_low != null
+                ? `>${m.reference_low}`
+                : "",
+        range_low: m.reference_low,
+        range_high: m.reference_high,
+        status: "unknown",
+        bloodwork_status: null,
+      }));
+    }
+
     const markers = matchExtractedMarkers(rawMarkers, (catalog ?? []) as BloodMarker[]);
     const matchedCount = markers.filter((m) => m.matched).length;
     const warnings: string[] = [];
 
     if (matchedCount < markers.length) {
       warnings.push(
-        `${markers.length - matchedCount} marker(s) could not be matched to the catalog — review names before saving.`
+        `${markers.length - matchedCount} marker(s) could not be matched to the catalog — names were preserved from the PDF.`
       );
+    }
+
+    const resultInputs = markers.map((m) => ({
+      marker_name: m.marker_name,
+      category: m.category,
+      result_value: m.result_value,
+      unit: m.unit,
+      reference_low: m.reference_low,
+      reference_high: m.reference_high,
+      status: m.status,
+      result_text: m.result_text,
+      comparator: m.comparator,
+      flag: m.flag,
+      reference_range: m.reference_range,
+    }));
+
+    await supabase.from("bloodwork_results").delete().eq("report_id", reportId);
+
+    if (resultInputs.length > 0) {
+      const rows = resultInputs.map((r) => toBloodworkResultRow(reportId, r));
+      const { error: insertError } = await supabase.from("bloodwork_results").insert(rows);
+      if (insertError) {
+        console.error("[bloodwork/extract] failed to save markers", {
+          reportId,
+          error: insertError,
+        });
+        return NextResponse.json({ error: insertError.message }, { status: 500 });
+      }
     }
 
     await supabase
       .from("bloodwork_reports")
-      .update({ status: "pending_review" })
+      .update({
+        status: "complete",
+        extraction_snapshot: structuredSnapshot,
+      })
       .eq("id", reportId)
       .eq("user_id", user.id);
 
+    const structured_markers = structuredSnapshot.map((m) => ({
+      panel: m.panel,
+      marker: m.marker,
+      result: m.result,
+      numeric_value: m.numeric_value,
+      comparator: m.comparator,
+      flag: m.flag,
+      unit: m.unit,
+      reference_range: m.reference_range,
+      range_low: m.range_low,
+      range_high: m.range_high,
+      status: m.status,
+    }));
+
     return NextResponse.json({
-      markers,
+      markers: markers.map((m) => ({
+        marker_name: m.marker_name,
+        category: m.category,
+        result_value: m.result_value,
+        unit: m.unit,
+        reference_low: m.reference_low,
+        reference_high: m.reference_high,
+        status: m.status,
+        result_text: m.result_text,
+        comparator: m.comparator,
+        flag: m.flag,
+        reference_range: m.reference_range,
+        marker_id: m.marker_id,
+        raw_name: m.raw_name,
+        matched: m.matched,
+      })),
+      structured_markers,
       warnings,
       extractedCount: markers.length,
       matchedCount,
+      saved: true,
+      parser,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Extraction failed";
+    console.error("[bloodwork/extract] extraction failed", err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

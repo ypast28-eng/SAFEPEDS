@@ -1,4 +1,6 @@
-import type { BloodMarker } from "@/types/bloodwork";
+import type { BloodMarker, BloodworkStatus } from "@/types/bloodwork";
+import { toBloodworkStatus } from "@/lib/bloodwork/detect-marker-status";
+import type { ParsedMarkerStatus } from "@/lib/bloodwork/detect-marker-status";
 
 export interface RawExtractedMarker {
   name: string;
@@ -6,6 +8,12 @@ export interface RawExtractedMarker {
   unit: string;
   reference_low: number | null;
   reference_high: number | null;
+  panel?: string;
+  result_text?: string;
+  comparator?: string | null;
+  flag?: string | null;
+  reference_range?: string;
+  parsed_status?: ParsedMarkerStatus;
 }
 
 export interface MatchedExtractedMarker {
@@ -15,9 +23,14 @@ export interface MatchedExtractedMarker {
   unit: string;
   reference_low: number | null;
   reference_high: number | null;
+  status: BloodworkStatus | null;
   marker_id: string | null;
   raw_name: string;
   matched: boolean;
+  result_text?: string | null;
+  comparator?: string | null;
+  flag?: string | null;
+  reference_range?: string | null;
 }
 
 /** Common lab report aliases → catalog name */
@@ -110,16 +123,26 @@ export function matchExtractedMarkers(
     .filter((item) => item.name.trim() && Number.isFinite(item.value))
     .map((item) => {
       const marker = findCatalogMarker(item.name, catalog);
+      const status =
+        item.parsed_status != null
+          ? toBloodworkStatus(item.parsed_status)
+          : null;
+
       return {
         marker_name: marker?.name ?? item.name.trim(),
-        category: marker?.category ?? "Other",
+        category: item.panel?.trim() || marker?.category || "Other",
         result_value: item.value,
         unit: item.unit?.trim() || marker?.default_unit || "",
         reference_low: item.reference_low ?? marker?.default_reference_low ?? null,
         reference_high: item.reference_high ?? marker?.default_reference_high ?? null,
+        status,
         marker_id: marker?.id ?? null,
         raw_name: item.name.trim(),
         matched: Boolean(marker),
+        result_text: item.result_text ?? null,
+        comparator: item.comparator ?? null,
+        flag: item.flag ?? null,
+        reference_range: item.reference_range ?? null,
       };
     });
 }

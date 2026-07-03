@@ -14,6 +14,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { Button, Card, Input, Textarea, Badge } from "@/components/ui";
+import { BloodworkExtractionPreview } from "./BloodworkExtractionPreview";
 import { ManualEntryForm } from "./ManualEntryForm";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -29,10 +30,24 @@ import {
   validateBloodworkUploadFile,
 } from "@/lib/bloodwork/upload";
 import { BLOODWORK_UPLOAD_ACCEPT } from "@/types/bloodwork";
-import type { BloodworkPhaseInput, BloodworkReport, ExtractedBloodworkMarker } from "@/types/bloodwork";
+import type {
+  BloodworkPhaseInput,
+  BloodworkReport,
+  StructuredBloodworkMarker,
+} from "@/types/bloodwork";
 import { cn } from "@/utils/cn";
 
-type UploadStep = "form" | "uploaded" | "review" | "manual";
+type UploadStep = "form" | "uploaded" | "preview" | "manual";
+
+function isPdfFile(file: File | BloodworkReport): boolean {
+  if (file instanceof File) {
+    return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  }
+  return (
+    file.file_type === "application/pdf" ||
+    Boolean(file.file_name?.toLowerCase().endsWith(".pdf"))
+  );
+}
 
 export function UploadReportForm({
   phase,
@@ -55,14 +70,17 @@ export function UploadReportForm({
   const [uploadedReport, setUploadedReport] = useState<BloodworkReport | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
-  const [extractedMarkers, setExtractedMarkers] = useState<ExtractedBloodworkMarker[]>([]);
+  const [structuredMarkers, setStructuredMarkers] = useState<StructuredBloodworkMarker[]>([]);
   const [extractionWarnings, setExtractionWarnings] = useState<string[]>([]);
+  const [extractedCount, setExtractedCount] = useState(0);
+  const [parser, setParser] = useState<"pdf" | "openai">("pdf");
 
   const [isUploading, setIsUploading] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [extractNotice, setExtractNotice] = useState<string | null>(null);
   const [extractionConfigured, setExtractionConfigured] = useState<boolean | null>(null);
+  const [pdfParserAvailable, setPdfParserAvailable] = useState(true);
   const [setupInstructions, setSetupInstructions] = useState<string | null>(null);
 
   useEffect(() => {
@@ -77,11 +95,48 @@ export function UploadReportForm({
 
   useEffect(() => {
     if (step !== "uploaded") return;
-    fetchExtractionConfig().then(({ configured, setupInstructions: instructions }) => {
+    fetchExtractionConfig().then(({ configured, pdfParserAvailable: pdfAvailable, setupInstructions: instructions }) => {
       setExtractionConfigured(configured);
+      setPdfParserAvailable(pdfAvailable);
       setSetupInstructions(instructions);
     });
   }, [step]);
+
+  async function runExtraction(report: BloodworkReport) {
+    setError(null);
+    setExtractNotice(null);
+    setExtractionWarnings([]);
+    setIsExtracting(true);
+
+    try {
+      const outcome = await extractMarkersFromReport(report.id);
+
+      if (outcome.setupRequired) {
+        setExtractNotice(outcome.setupMessage);
+        setStep("manual");
+        return;
+      }
+
+      if (outcome.error || !outcome.data) {
+        setError(outcome.error ?? "Extraction failed. Try again or enter markers manually.");
+        return;
+      }
+
+      if (outcome.data.markers.length === 0) {
+        setError("No markers were found in this file. Enter values manually.");
+        return;
+      }
+
+      setStructuredMarkers(outcome.data.structured_markers);
+      setExtractedCount(outcome.data.extractedCount);
+      setParser(outcome.data.parser);
+      setExtractionWarnings(outcome.data.warnings);
+      setUploadedReport((prev) => (prev ? { ...prev, status: "complete" } : prev));
+      setStep("preview");
+    } finally {
+      setIsExtracting(false);
+    }
+  }
 
   const onFileChange = useCallback((next: File | null) => {
     setError(null);
@@ -155,6 +210,9 @@ export function UploadReportForm({
       }
       setPreviewUrl(url);
       setStep("uploaded");
+      if (isPdfFile(file)) {
+        await runExtraction(data);
+      }
     } finally {
       setIsUploading(false);
     }
@@ -162,39 +220,7 @@ export function UploadReportForm({
 
   async function handleExtractMarkers() {
     if (!uploadedReport) return;
-    setError(null);
-    setExtractNotice(null);
-    setExtractionWarnings([]);
-    setIsExtracting(true);
-
-    try {
-      const outcome = await extractMarkersFromReport(uploadedReport.id);
-
-      if (outcome.setupRequired) {
-        setExtractNotice(outcome.setupMessage);
-        setStep("manual");
-        return;
-      }
-
-      if (outcome.error || !outcome.data) {
-        setError(outcome.error ?? "Extraction failed. Try again or enter markers manually.");
-        return;
-      }
-
-      if (outcome.data.markers.length === 0) {
-        setError("No markers were found in this file. Enter values manually.");
-        return;
-      }
-
-      setExtractedMarkers(outcome.data.markers);
-      setExtractionWarnings(outcome.data.warnings);
-      setUploadedReport((prev) =>
-        prev ? { ...prev, status: "pending_review" } : prev
-      );
-      setStep("review");
-    } finally {
-      setIsExtracting(false);
-    }
+    await runExtraction(uploadedReport);
   }
 
   function openManualEntry(notice?: string) {
@@ -202,27 +228,24 @@ export function UploadReportForm({
     setStep("manual");
   }
 
-  if (step === "review" && uploadedReport) {
-    const reviewNotice = [
-      `Extracted ${extractedMarkers.length} marker(s) from your uploaded report. Review and edit values before saving.`,
-      ...extractionWarnings,
-    ].join("\n\n");
-
+  if (step === "preview" && uploadedReport) {
     return (
       <div className="space-y-6">
         <Card variant="bordered" padding="md" className="border-primary/20 bg-primary/5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-medium text-foreground">Review extracted markers</p>
+              <p className="text-sm font-medium text-foreground">Markers saved to your report</p>
               <p className="text-sm text-muted mt-1">
-                Confirm each value matches your lab report. Unmatched markers can be mapped using
-                the dropdown.
+                All extracted markers were saved to Supabase and are available on your Bloodwork
+                dashboard and in AI Insights.
               </p>
-              {uploadedReport.file_name && (
-                <p className="text-xs text-muted mt-2">File: {uploadedReport.file_name}</p>
+              {extractionWarnings.length > 0 && (
+                <p className="text-xs text-muted mt-2 whitespace-pre-line">
+                  {extractionWarnings.join("\n")}
+                </p>
               )}
             </div>
-            <div className="flex gap-2 shrink-0">
+            <div className="flex flex-wrap gap-2 shrink-0">
               {previewUrl && (
                 <a href={previewUrl} target="_blank" rel="noopener noreferrer">
                   <Button type="button" variant="outline" size="sm">
@@ -233,20 +256,34 @@ export function UploadReportForm({
               )}
               <Button
                 type="button"
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                onClick={() => openManualEntry("Enter marker values manually.")}
+                onClick={() => openManualEntry("Edit or add marker values manually.")}
               >
-                Manual entry
+                Edit manually
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => router.push(`/bloodwork/reports/${uploadedReport.id}`)}
+              >
+                View report
               </Button>
             </div>
           </div>
         </Card>
-        <ManualEntryForm
-          existingReportId={uploadedReport.id}
-          initialExtracted={extractedMarkers}
-          reviewNotice={reviewNotice}
+
+        <BloodworkExtractionPreview
+          markers={structuredMarkers}
+          extractedCount={extractedCount}
+          parser={parser}
         />
+
+        <div className="flex gap-3">
+          <Button type="button" variant="ghost" onClick={() => router.push("/bloodwork")}>
+            Back to Bloodwork
+          </Button>
+        </div>
       </div>
     );
   }
@@ -354,8 +391,9 @@ export function UploadReportForm({
             >
               <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />
               <span>
-                Analyzing your lab report with AI… This may take 15–30 seconds for PDFs and
-                images.
+                {isPdfFile(uploadedReport)
+                  ? "Reading your PDF and extracting all blood markers…"
+                  : "Analyzing your lab report with AI… This may take 15–30 seconds for images."}
               </span>
             </div>
           )}
@@ -383,7 +421,7 @@ export function UploadReportForm({
             </div>
           )}
 
-          {extractionConfigured === false && setupInstructions && !isExtracting && (
+          {extractionConfigured === false && !isPdfFile(uploadedReport) && setupInstructions && !isExtracting && (
             <div
               role="note"
               className="mt-4 rounded-lg border border-border/60 bg-surface/50 px-4 py-3 text-sm text-muted whitespace-pre-line"
@@ -422,9 +460,11 @@ export function UploadReportForm({
           </div>
 
           <p className="text-xs text-muted mt-4">
-            {extractionConfigured
-              ? "Extract markers uses AI to read your PDF or image and pre-fill results for review before saving."
-              : "Configure OPENAI_API_KEY on the server to enable automatic extraction, or enter markers manually."}
+            {isPdfFile(uploadedReport) || pdfParserAvailable
+              ? "PDF uploads are parsed locally to extract every marker row, including flags, units, and reference ranges."
+              : extractionConfigured
+                ? "Image uploads use AI to read your report and save structured marker rows."
+                : "Configure OPENAI_API_KEY on the server to enable image extraction, or enter markers manually."}
           </p>
         </Card>
       </div>

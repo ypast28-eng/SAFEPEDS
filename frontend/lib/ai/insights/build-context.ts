@@ -3,7 +3,7 @@ import { fetchEnabledRiskRules } from "@/lib/risk/rules-repository";
 import { bloodworkToRiskInput, cycleToRiskInput, profileToRiskInput } from "@/lib/risk/transform";
 import { pickDefaultCycleId } from "@/lib/risk/compound-insights";
 import type { InsightsCycleSummary, InsightsStructuredContext } from "@/types/ai-insights";
-import type { BloodworkReportWithResults } from "@/types/bloodwork";
+import type { BloodworkReportWithResults, StructuredBloodworkMarker } from "@/types/bloodwork";
 import type { UserCycleWithCompounds } from "@/types/cycles";
 import type { Profile } from "@/types/database";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -72,6 +72,10 @@ function flattenBloodwork(reports: BloodworkReportWithResults[]) {
         report.phase === "cruise" || report.phase === "blast" || report.phase === "unknown"
           ? report.phase
           : null,
+      result_text: r.result_text ?? null,
+      reference_range: r.reference_range ?? null,
+      flag: r.flag ?? null,
+      comparator: r.comparator ?? null,
     }))
   );
 }
@@ -182,6 +186,9 @@ export async function buildInsightsContext(
       marker_count: r.bloodwork_results?.length ?? 0,
       phase:
         r.phase === "cruise" || r.phase === "blast" || r.phase === "unknown" ? r.phase : null,
+      structured_markers:
+        (r as BloodworkReportWithResults & { extraction_snapshot?: StructuredBloodworkMarker[] | null })
+          .extraction_snapshot ?? null,
     })),
     current_cycle: currentCycle,
     previous_cycles: previousCycles,

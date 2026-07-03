@@ -1,4 +1,5 @@
 import type { AiSourceReference } from "@/types/ai";
+import type { StructuredBloodworkMarker } from "@/types/bloodwork";
 
 export type HealthScoreLabel = "Excellent" | "Good" | "Fair" | "Needs Attention";
 export type RiskLevelLabel = "Low" | "Moderate" | "High";
@@ -56,6 +57,10 @@ export interface InsightsBloodworkPoint {
   report_id: string;
   report_name: string;
   phase: "cruise" | "blast" | "unknown" | null;
+  result_text: string | null;
+  reference_range: string | null;
+  flag: string | null;
+  comparator: string | null;
 }
 
 export interface InsightsStructuredContext {
@@ -69,6 +74,7 @@ export interface InsightsStructuredContext {
     lab_name: string | null;
     marker_count: number;
     phase: "cruise" | "blast" | "unknown" | null;
+    structured_markers?: StructuredBloodworkMarker[] | null;
   }>;
   current_cycle: InsightsCycleSummary | null;
   previous_cycles: InsightsCycleSummary[];

@@ -1,4 +1,5 @@
 import { calculateStatus } from "@/lib/bloodwork/status";
+import { toBloodworkResultRow } from "@/lib/bloodwork/result-row";
 import { isSupabaseEnvConfigured } from "@/lib/supabase/env";
 import { tryCreateClient } from "@/lib/supabase/client";
 import { MOCK_BLOOD_MARKERS } from "@/lib/mock/compounds";
@@ -212,16 +213,7 @@ export async function createReportWithResults(
   if (reportError) return { data: null, error: reportError.message };
 
   if (input.results.length > 0) {
-    const rows = input.results.map((r) => ({
-      report_id: report.id,
-      marker_name: r.marker_name,
-      category: r.category,
-      result_value: r.result_value,
-      unit: r.unit,
-      reference_low: r.reference_low,
-      reference_high: r.reference_high,
-      status: calculateStatus(r.result_value, r.reference_low, r.reference_high),
-    }));
+    const rows = input.results.map((r) => toBloodworkResultRow(report.id, r));
 
     const { error: resultsError } = await supabase.from("bloodwork_results").insert(rows);
     if (resultsError) {
@@ -342,19 +334,7 @@ export async function appendResultsToReport(
   }
 
   const supabase = tryCreateClient()!;
-  const rows = results.map((r) => ({
-    report_id: reportId,
-    marker_name: r.marker_name,
-    category: r.category,
-    result_value: r.result_value,
-    unit: r.unit,
-    reference_low: r.reference_low,
-    reference_high: r.reference_high,
-    status:
-      r.status !== undefined
-        ? r.status
-        : calculateStatus(r.result_value, r.reference_low, r.reference_high),
-  }));
+  const rows = results.map((r) => toBloodworkResultRow(reportId, r));
 
   const { error } = await supabase.from("bloodwork_results").insert(rows);
   if (error) return { error: error.message };
@@ -422,22 +402,19 @@ export async function updateBloodworkReport(
           reference_low: result.reference_low,
           reference_high: result.reference_high,
           status,
+          result_text: result.result_text ?? null,
+          comparator: result.comparator ?? null,
+          flag: result.flag ?? null,
+          reference_range: result.reference_range ?? null,
         })
         .eq("id", result.id)
         .eq("report_id", reportId);
 
       if (updateError) return { error: updateError.message };
     } else {
-      const { error: insertError } = await supabase.from("bloodwork_results").insert({
-        report_id: reportId,
-        marker_name: result.marker_name,
-        category: result.category,
-        result_value: result.result_value,
-        unit: result.unit,
-        reference_low: result.reference_low,
-        reference_high: result.reference_high,
-        status,
-      });
+      const { error: insertError } = await supabase
+        .from("bloodwork_results")
+        .insert(toBloodworkResultRow(reportId, result));
 
       if (insertError) return { error: insertError.message };
     }
@@ -523,9 +500,12 @@ export async function extractMarkersFromReport(
       message?: string;
       error?: string;
       markers?: ExtractedBloodworkMarker[];
+      structured_markers?: BloodworkExtractionResult["structured_markers"];
       warnings?: string[];
       extractedCount?: number;
       matchedCount?: number;
+      saved?: boolean;
+      parser?: "pdf" | "openai";
     };
 
     if (res.status === 503 && json.code === "setup_required") {
@@ -548,9 +528,12 @@ export async function extractMarkersFromReport(
     return {
       data: {
         markers: json.markers ?? [],
+        structured_markers: json.structured_markers ?? [],
         warnings: json.warnings ?? [],
         extractedCount: json.extractedCount ?? json.markers?.length ?? 0,
         matchedCount: json.matchedCount ?? 0,
+        saved: Boolean(json.saved),
+        parser: json.parser ?? "openai",
       },
       error: null,
       setupRequired: false,
@@ -567,22 +550,25 @@ export async function extractMarkersFromReport(
 /** Check whether server-side extraction is configured (OPENAI_API_KEY). */
 export async function fetchExtractionConfig(): Promise<{
   configured: boolean;
+  pdfParserAvailable: boolean;
   setupInstructions: string | null;
 }> {
   try {
     const res = await fetch("/api/bloodwork/extract");
     if (!res.ok) {
-      return { configured: false, setupInstructions: null };
+      return { configured: false, pdfParserAvailable: true, setupInstructions: null };
     }
     const json = (await res.json()) as {
       configured?: boolean;
+      pdfParserAvailable?: boolean;
       setupInstructions?: string | null;
     };
     return {
       configured: Boolean(json.configured),
+      pdfParserAvailable: json.pdfParserAvailable ?? true,
       setupInstructions: json.setupInstructions ?? null,
     };
   } catch {
-    return { configured: false, setupInstructions: null };
+    return { configured: false, pdfParserAvailable: true, setupInstructions: null };
   }
 }
