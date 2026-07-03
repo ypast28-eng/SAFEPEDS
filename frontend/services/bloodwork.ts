@@ -1,6 +1,7 @@
 import { calculateStatus } from "@/lib/bloodwork/status";
 import { resolveBloodworkPhase } from "@/lib/bloodwork/phase";
-import { toBloodworkResultRow } from "@/lib/bloodwork/result-row";
+import { normalizeBloodworkResults } from "@/lib/bloodwork/normalize-result";
+import { bloodworkResultToDbFields, toBloodworkResultRow } from "@/lib/bloodwork/result-row";
 import { isSupabaseEnvConfigured } from "@/lib/supabase/env";
 import { tryCreateClient } from "@/lib/supabase/client";
 import { MOCK_BLOOD_MARKERS } from "@/lib/mock/compounds";
@@ -42,7 +43,9 @@ function normalizePhase(phase: unknown): import("@/types/bloodwork").BloodworkPh
 function normalizeReport<T extends BloodworkReport & { bloodwork_results?: { length: number } }>(
   row: T
 ): T {
-  const results = Array.isArray(row.bloodwork_results) ? row.bloodwork_results : [];
+  const results = normalizeBloodworkResults(
+    (Array.isArray(row.bloodwork_results) ? row.bloodwork_results : []) as Record<string, unknown>[]
+  );
   const resultsCount = results.length;
   const filePath =
     (typeof row.file_path === "string" && row.file_path.trim()) ||
@@ -150,12 +153,14 @@ export async function fetchReportsWithStats(): Promise<{
   }
 
   const enriched: BloodworkReportWithResults[] = (reports ?? []).map((r) => {
-    const row = r as BloodworkReportWithResults & { bloodwork_results?: BloodworkReportWithResults["bloodwork_results"] };
-    const results = (row.bloodwork_results ?? []) as BloodworkReportWithResults["bloodwork_results"];
+    const row = r as Record<string, unknown> & {
+      bloodwork_results?: Record<string, unknown>[];
+    };
+    const results = normalizeBloodworkResults(row.bloodwork_results);
     const out_of_range_count = results.filter(
       (res) => res.status === "Low" || res.status === "High"
     ).length;
-    return { ...row, bloodwork_results: results, out_of_range_count };
+    return { ...row, bloodwork_results: results, out_of_range_count } as BloodworkReportWithResults;
   }).map((row) => normalizeReport(row));
 
   return {
@@ -181,12 +186,16 @@ export async function fetchReportById(
   if (error) return { data: null, error: error.message };
   if (!data) return { data: null, error: null };
 
-  const results = (data.bloodwork_results ?? []) as BloodworkReportWithResults["bloodwork_results"];
+  const results = normalizeBloodworkResults(
+    (data as { bloodwork_results?: Record<string, unknown>[] }).bloodwork_results
+  ).sort((a, b) =>
+    a.marker_name.localeCompare(b.marker_name)
+  );
   return {
     data: {
       ...normalizeReport({
         ...data,
-        bloodwork_results: results.sort((a, b) => a.marker_name.localeCompare(b.marker_name)),
+        bloodwork_results: results,
         out_of_range_count: results.filter((r) => r.status === "Low" || r.status === "High").length,
       } as BloodworkReportWithResults),
     } as BloodworkReportWithResults,
@@ -216,7 +225,7 @@ export async function createReportWithResults(
   if (reportError) return { data: null, error: reportError.message };
 
   if (input.results.length > 0) {
-    const rows = input.results.map((r) => toBloodworkResultRow(report.id, r));
+    const rows = input.results.map((r) => toBloodworkResultRow(report.id, userId, r));
 
     const { error: resultsError } = await supabase.from("bloodwork_results").insert(rows);
     if (resultsError) {
@@ -337,7 +346,16 @@ export async function appendResultsToReport(
   }
 
   const supabase = tryCreateClient()!;
-  const rows = results.map((r) => toBloodworkResultRow(reportId, r));
+  const { data: report, error: reportError } = await supabase
+    .from("bloodwork_reports")
+    .select("user_id")
+    .eq("id", reportId)
+    .maybeSingle();
+
+  if (reportError) return { error: reportError.message };
+  if (!report?.user_id) return { error: "Report not found." };
+
+  const rows = results.map((r) => toBloodworkResultRow(reportId, report.user_id, r));
 
   const { error } = await supabase.from("bloodwork_results").insert(rows);
   if (error) return { error: error.message };
@@ -379,6 +397,15 @@ export async function updateBloodworkReport(
 
   if (reportError) return { error: reportError.message };
 
+  const { data: reportOwner, error: ownerError } = await supabase
+    .from("bloodwork_reports")
+    .select("user_id")
+    .eq("id", reportId)
+    .maybeSingle();
+
+  if (ownerError) return { error: ownerError.message };
+  if (!reportOwner?.user_id) return { error: "Report not found." };
+
   const deletedIds = input.deleted_result_ids ?? [];
   if (deletedIds.length > 0) {
     const { error: deleteError } = await supabase
@@ -399,19 +426,7 @@ export async function updateBloodworkReport(
     if (result.id) {
       const { error: updateError } = await supabase
         .from("bloodwork_results")
-        .update({
-          marker_name: result.marker_name,
-          category: result.category,
-          result_value: result.result_value,
-          unit: result.unit,
-          reference_low: result.reference_low,
-          reference_high: result.reference_high,
-          status,
-          result_text: result.result_text ?? null,
-          comparator: result.comparator ?? null,
-          flag: result.flag ?? null,
-          reference_range: result.reference_range ?? null,
-        })
+        .update(bloodworkResultToDbFields({ ...result, status }))
         .eq("id", result.id)
         .eq("report_id", reportId);
 
@@ -419,7 +434,7 @@ export async function updateBloodworkReport(
     } else {
       const { error: insertError } = await supabase
         .from("bloodwork_results")
-        .insert(toBloodworkResultRow(reportId, result));
+        .insert(toBloodworkResultRow(reportId, reportOwner.user_id, result));
 
       if (insertError) return { error: insertError.message };
     }

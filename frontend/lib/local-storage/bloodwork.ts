@@ -1,4 +1,6 @@
 import { calculateStatus } from "@/lib/bloodwork/status";
+import { normalizeBloodworkResult } from "@/lib/bloodwork/normalize-result";
+import { bloodworkResultToDbFields } from "@/lib/bloodwork/result-row";
 import { resolveBloodworkPhase } from "@/lib/bloodwork/phase";
 import { readJson, writeJson } from "@/lib/local-storage/store";
 import {
@@ -88,30 +90,26 @@ export function localFetchReportById(id: string): BloodworkReportWithResults | n
   return report ? enrich(report) : null;
 }
 
+function buildLocalResult(
+  reportId: string,
+  input: BloodworkResultInput,
+  createdAt: string
+) {
+  return normalizeBloodworkResult({
+    id: crypto.randomUUID(),
+    report_id: reportId,
+    user_id: LOCAL_USER_ID,
+    created_at: createdAt,
+    ...bloodworkResultToDbFields(input),
+  });
+}
+
 export function localCreateReportWithResults(
   input: CreateReportInput
 ): BloodworkReport {
   const ts = nowIso();
   const reportId = crypto.randomUUID();
-  const results = input.results.map((r) => ({
-    id: crypto.randomUUID(),
-    report_id: reportId,
-    marker_name: r.marker_name,
-    category: r.category,
-    result_value: r.result_value,
-    unit: r.unit,
-    reference_low: r.reference_low,
-    reference_high: r.reference_high,
-    status:
-      r.status !== undefined
-        ? r.status
-        : calculateStatus(r.result_value, r.reference_low, r.reference_high),
-    result_text: r.result_text ?? null,
-    comparator: r.comparator ?? null,
-    flag: r.flag ?? null,
-    reference_range: r.reference_range ?? null,
-    created_at: ts,
-  }));
+  const results = input.results.map((r) => buildLocalResult(reportId, r, ts));
 
   const report: BloodworkReportWithResults = enrich({
     id: reportId,
@@ -147,25 +145,7 @@ export function localAppendResultsToReport(
   if (idx < 0) return;
 
   const ts = nowIso();
-  const newResults = inputs.map((r) => ({
-    id: crypto.randomUUID(),
-    report_id: reportId,
-    marker_name: r.marker_name,
-    category: r.category,
-    result_value: r.result_value,
-    unit: r.unit,
-    reference_low: r.reference_low,
-    reference_high: r.reference_high,
-    status:
-      r.status !== undefined
-        ? r.status
-        : calculateStatus(r.result_value, r.reference_low, r.reference_high),
-    result_text: r.result_text ?? null,
-    comparator: r.comparator ?? null,
-    flag: r.flag ?? null,
-    reference_range: r.reference_range ?? null,
-    created_at: ts,
-  }));
+  const newResults = inputs.map((r) => buildLocalResult(reportId, r, ts));
 
   const updated = enrich({
     ...reports[idx],
@@ -203,43 +183,15 @@ export function localUpdateReportWithResults(
       patch.status !== undefined
         ? patch.status
         : calculateStatus(patch.result_value, patch.reference_low, patch.reference_high);
-    return {
+    return normalizeBloodworkResult({
       ...existing,
-      marker_name: patch.marker_name,
-      category: patch.category,
-      result_value: patch.result_value,
-      unit: patch.unit,
-      reference_low: patch.reference_low,
-      reference_high: patch.reference_high,
-      status,
-      result_text: patch.result_text ?? existing.result_text ?? null,
-      comparator: patch.comparator ?? existing.comparator ?? null,
-      flag: patch.flag ?? existing.flag ?? null,
-      reference_range: patch.reference_range ?? existing.reference_range ?? null,
-    };
+      ...bloodworkResultToDbFields({ ...patch, status }),
+    });
   });
 
   const newResults = input.results
     .filter((r) => !r.id)
-    .map((r) => ({
-      id: crypto.randomUUID(),
-      report_id: reportId,
-      marker_name: r.marker_name,
-      category: r.category,
-      result_value: r.result_value,
-      unit: r.unit,
-      reference_low: r.reference_low,
-      reference_high: r.reference_high,
-      status:
-        r.status !== undefined
-          ? r.status
-          : calculateStatus(r.result_value, r.reference_low, r.reference_high),
-      result_text: r.result_text ?? null,
-      comparator: r.comparator ?? null,
-      flag: r.flag ?? null,
-      reference_range: r.reference_range ?? null,
-      created_at: ts,
-    }));
+    .map((r) => buildLocalResult(reportId, r, ts));
 
   const report: BloodworkReportWithResults = enrich({
     ...reports[idx],
