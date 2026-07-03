@@ -453,8 +453,29 @@ export async function deleteReport(id: string): Promise<{ error: string | null }
   }
 
   const supabase = tryCreateClient()!;
-  const { error } = await supabase.from("bloodwork_reports").delete().eq("id", id);
-  return { error: error?.message ?? null };
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    const message = "You must be signed in to delete bloodwork.";
+    console.error("[bloodwork] delete failed — not authenticated", { reportId: id, authError });
+    return { error: message };
+  }
+
+  const { error } = await supabase
+    .from("bloodwork_reports")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
+
+  if (error) {
+    console.error("[bloodwork] delete failed", { reportId: id, userId: user.id, error });
+    return { error: error.message };
+  }
+
+  return { error: null };
 }
 
 export async function fetchHistoryForMarker(
