@@ -8,8 +8,9 @@ import {
 import { formatBloodworkInsertError } from "@/lib/bloodwork/db-errors";
 import { EXPECTED_CLINIPATH_MARKER_COUNT } from "@/lib/bloodwork/clinipath-parser";
 import { runStrictExtractionPipeline } from "@/lib/bloodwork/extraction-pipeline";
+import { traceAndParsePdf } from "@/lib/bloodwork/extraction-trace";
 import { buildExtractionSnapshot } from "@/lib/bloodwork/parsed-to-result";
-import { parseBloodworkPdfTextWithMeta } from "@/lib/bloodwork/parseBloodworkPdf";
+import type { ParsedBloodworkMarker } from "@/lib/bloodwork/parseBloodworkPdf";
 import { prepareMarkersForInsert } from "@/lib/bloodwork/validate-markers";
 import { toBloodworkResultRows } from "@/lib/bloodwork/result-row";
 import { getReportStoragePath } from "@/lib/bloodwork/upload";
@@ -150,7 +151,7 @@ export async function POST(request: Request) {
 
     let parser: "pdf" | "openai" = "openai";
     let structuredSnapshot: ReturnType<typeof buildExtractionSnapshot> = [];
-    let extractedMarkers: ReturnType<typeof parseBloodworkPdfTextWithMeta>["finalMarkers"] = [];
+    let extractedMarkers: ParsedBloodworkMarker[] = [];
     let mappedMarkers: unknown[] = [];
     let validatedMarkers: ReturnType<typeof prepareMarkersForInsert>["validated"] = [];
     let skippedMarkers: ReturnType<typeof prepareMarkersForInsert>["skipped"] = [];
@@ -159,10 +160,8 @@ export async function POST(request: Request) {
     const warnings: string[] = [];
 
     if (pdf) {
-      const pdfParse = (await import("pdf-parse")).default;
-      const parsedPdf = await pdfParse(buffer);
-      rawText = parsedPdf.text ?? "";
-      const parsed = parseBloodworkPdfTextWithMeta(rawText);
+      const { trace, parseResult: parsed } = await traceAndParsePdf(buffer);
+      rawText = trace.pdfExtraction.combinedText;
       extractedMarkers = parsed.finalMarkers;
       structuredSnapshot = buildExtractionSnapshot(extractedMarkers);
       parser = "pdf";
@@ -184,6 +183,20 @@ export async function POST(request: Request) {
             error: `Incomplete extraction: found ${validMarkers.length} of ${EXPECTED_CLINIPATH_MARKER_COUNT} expected markers.`,
             message: `Incomplete extraction: found ${validMarkers.length} of ${EXPECTED_CLINIPATH_MARKER_COUNT} expected markers. Missing: ${parsed.missingMarkers.join(", ")}`,
             missingMarkers: parsed.missingMarkers,
+            emptyPdfPages: trace.pdfExtraction.pages
+              .filter((page) => page.isEmpty)
+              .map((page) => page.pageNumber),
+            pageCount: trace.pdfExtraction.pageCount,
+            textExtractionMethod: trace.textExtractionMethod,
+            ocrUsed: trace.ocrUsed,
+            pageExtractionStats: trace.pdfExtraction.pages.map((page) => ({
+              pageNumber: page.pageNumber,
+              pdfJsCharCount: page.pdfJsCharCount,
+              ocrCharCount: page.ocrCharCount,
+              finalCharCount: page.charCount,
+              ocrUsed: page.ocrUsed,
+            })),
+            markerDiagnostics: trace.missingMarkerDiagnostics,
             extractedCount: validMarkers.length,
             warnings,
             parser,

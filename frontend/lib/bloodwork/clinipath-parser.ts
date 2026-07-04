@@ -40,7 +40,7 @@ function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function buildMarkerPattern(name: string): RegExp {
+export function buildMarkerPattern(name: string): RegExp {
   const aliases = Object.entries(MARKER_NAME_ALIASES)
     .filter(([, target]) => target === name)
     .map(([alias]) => alias);
