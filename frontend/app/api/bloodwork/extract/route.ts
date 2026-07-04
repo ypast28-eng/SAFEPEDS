@@ -13,7 +13,7 @@ import { buildExtractionSnapshot } from "@/lib/bloodwork/parsed-to-result";
 import type { ParsedBloodworkMarker } from "@/lib/bloodwork/parseBloodworkPdf";
 import { prepareMarkersForInsert } from "@/lib/bloodwork/validate-markers";
 import { toBloodworkResultRows } from "@/lib/bloodwork/result-row";
-import { getReportStoragePath } from "@/lib/bloodwork/upload";
+import { getReportStoragePath, resolveReportFilePath } from "@/lib/bloodwork/upload";
 
 export const runtime = "nodejs";
 
@@ -121,10 +121,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Report not found" }, { status: 404 });
     }
 
-    const storagePath = getReportStoragePath(report);
-    const fileUrl = resolveFileUrl(report);
-    if (!storagePath && !fileUrl) {
-      return NextResponse.json({ error: "This report has no uploaded file" }, { status: 400 });
+    try {
+      resolveReportFilePath(report);
+    } catch (fileError) {
+      const message =
+        fileError instanceof Error ? fileError.message : "No uploaded file found";
+      return NextResponse.json({ error: message }, { status: 400 });
     }
 
     const downloaded = await downloadReportFile(supabase, report);
@@ -318,6 +320,7 @@ export async function POST(request: Request) {
       parser,
     });
   } catch (err) {
+    console.error("PDF extraction failed:", err);
     const message = err instanceof Error ? err.message : "Extraction failed";
     console.error("[bloodwork/extract] extraction failed", err);
     return NextResponse.json({ error: message }, { status: 500 });

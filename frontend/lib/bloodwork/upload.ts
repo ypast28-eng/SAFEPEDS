@@ -57,11 +57,54 @@ export function reportHasUploadedFile(report: {
   file_url?: string | null;
   file_name?: string | null;
 }): boolean {
-  return Boolean(
-    getReportStoragePath(report) ??
-      nonEmptyString(report.file_url) ??
-      nonEmptyString(report.uploaded_file_url)
-  );
+  try {
+    resolveUploadedFilePath({
+      storagePath: getReportStoragePath(report),
+      path: report.file_path,
+      url: report.file_url ?? report.uploaded_file_url,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export type UploadedReportFileRef = {
+  storagePath?: string | null;
+  path?: string | null;
+  url?: string | null;
+};
+
+/** Resolve storage path or URL before downloading a report file for extraction. */
+export function resolveUploadedFilePath(
+  uploadedFile: UploadedReportFileRef | null | undefined
+): string {
+  if (!uploadedFile) {
+    throw new Error("No uploaded file found");
+  }
+
+  const filePath =
+    nonEmptyString(uploadedFile.storagePath) ??
+    nonEmptyString(uploadedFile.path) ??
+    nonEmptyString(uploadedFile.url);
+
+  if (!filePath) {
+    throw new Error("Uploaded file has no storage path or URL");
+  }
+
+  return filePath;
+}
+
+export function resolveReportFilePath(report: {
+  file_path?: string | null;
+  uploaded_file_url?: string | null;
+  file_url?: string | null;
+}): string {
+  return resolveUploadedFilePath({
+    storagePath: getReportStoragePath(report),
+    path: report.file_path,
+    url: report.file_url ?? report.uploaded_file_url,
+  });
 }
 
 export function getBloodworkResultCount(report: { bloodwork_results?: unknown }): number {

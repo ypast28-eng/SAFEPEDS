@@ -146,55 +146,60 @@ export async function extractPdfTextByPage(
   buffer: Buffer,
   options?: { ocrRecognizer?: OcrRecognizer }
 ): Promise<PdfTextExtractionResult> {
-  const pdfjs = await getPdfJsServerModule();
-  const pdf = await pdfjs.getDocument({
-    data: new Uint8Array(buffer),
-    useSystemFonts: true,
-    disableFontFace: true,
-    isEvalSupported: false,
-  }).promise;
-
-  const pages: PdfPageText[] = [];
-  let documentOcrUsed = false;
-
-  const ocr =
-    options?.ocrRecognizer != null
-      ? {
-          recognize: options.ocrRecognizer,
-          terminate: async () => {},
-        }
-      : await createOcrRecognizer();
-
   try {
-    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-      const page = (await pdf.getPage(pageNumber)) as unknown as PdfRenderPage;
-      const pdfJsText = await extractTextLayerFromPage(page);
-      const needsOcr = shouldRunOcrForPage(pdfJsText.length);
+    const pdfjs = await getPdfJsServerModule();
+    const pdf = await pdfjs.getDocument({
+      data: new Uint8Array(buffer),
+      useSystemFonts: true,
+      disableFontFace: true,
+      isEvalSupported: false,
+    }).promise;
 
-      let ocrText = "";
-      if (needsOcr) {
-        documentOcrUsed = true;
-        const imageBuffer = await renderPageToImageBuffer(page);
-        ocrText = await ocr.recognize(imageBuffer);
+    const pages: PdfPageText[] = [];
+    let documentOcrUsed = false;
+
+    const ocr =
+      options?.ocrRecognizer != null
+        ? {
+            recognize: options.ocrRecognizer,
+            terminate: async () => {},
+          }
+        : await createOcrRecognizer();
+
+    try {
+      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+        const page = (await pdf.getPage(pageNumber)) as unknown as PdfRenderPage;
+        const pdfJsText = await extractTextLayerFromPage(page);
+        const needsOcr = shouldRunOcrForPage(pdfJsText.length);
+
+        let ocrText = "";
+        if (needsOcr) {
+          documentOcrUsed = true;
+          const imageBuffer = await renderPageToImageBuffer(page);
+          ocrText = await ocr.recognize(imageBuffer);
+        }
+
+        const pageText = buildPageText(pageNumber, pdfJsText, ocrText, needsOcr);
+        pages.push(pageText);
+        logHybridPageStats(pageText);
       }
-
-      const pageText = buildPageText(pageNumber, pdfJsText, ocrText, needsOcr);
-      pages.push(pageText);
-      logHybridPageStats(pageText);
+    } finally {
+      await ocr.terminate();
     }
-  } finally {
-    await ocr.terminate();
+
+    const combinedText = pages.map((page) => page.text).join("\n");
+
+    return {
+      method: documentOcrUsed ? "hybrid-pdf.js-ocr" : "pdf.js-text-layer",
+      pageCount: pdf.numPages,
+      pages,
+      combinedText,
+      ocrUsed: documentOcrUsed,
+    };
+  } catch (error) {
+    console.error("PDF extraction failed:", error);
+    throw error;
   }
-
-  const combinedText = pages.map((page) => page.text).join("\n");
-
-  return {
-    method: documentOcrUsed ? "hybrid-pdf.js-ocr" : "pdf.js-text-layer",
-    pageCount: pdf.numPages,
-    pages,
-    combinedText,
-    ocrUsed: documentOcrUsed,
-  };
 }
 
 export function logPdfPageText(extraction: PdfTextExtractionResult): void {
