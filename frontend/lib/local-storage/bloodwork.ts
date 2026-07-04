@@ -162,6 +162,7 @@ export function localAppendResultsToReport(
 
 export function localDeleteReport(id: string): void {
   saveReports(loadReports().filter((r) => r.id !== id));
+  saveHistory(loadHistory().filter((p) => p.report_id !== id));
 }
 
 export function localUpdateReportWithResults(

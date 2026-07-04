@@ -12,13 +12,14 @@ import {
   Building2,
   AlertTriangle,
   ChevronRight,
-  Trash2,
   Anchor,
   Zap,
+  CheckCircle2,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button, Card, Badge, Modal } from "@/components/ui";
 import { useBloodworkDashboard } from "@/hooks/useBloodworkDashboard";
+import { BloodworkDeleteButton } from "./BloodworkDeleteButton";
 import { StatusBadge } from "./StatusBadge";
 import { formatLabDate } from "@/utils/bloodwork";
 import { formatBloodworkPhase } from "@/lib/bloodwork/phase";
@@ -26,12 +27,14 @@ import { useState } from "react";
 import { cn } from "@/utils/cn";
 import { reportHasUploadedFile } from "@/lib/bloodwork/upload";
 
+type Notice = { type: "success" | "error"; message: string };
+
 export function BloodworkDashboardView() {
   const router = useRouter();
   const { stats, isLoading, remove } = useBloodworkDashboard();
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [deleteName, setDeleteName] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
+  const [notice, setNotice] = useState<Notice | null>(null);
 
   const {
     latestReport,
@@ -43,12 +46,28 @@ export function BloodworkDashboardView() {
     hasCruiseBaseline,
   } = stats;
 
+  function openDeleteDialog(reportId: string) {
+    setNotice(null);
+    setDeleteId(reportId);
+  }
+
   async function confirmDelete() {
     if (!deleteId) return;
     setIsDeleting(true);
-    await remove(deleteId);
+    setNotice(null);
+
+    const { error } = await remove(deleteId);
+
     setIsDeleting(false);
+
+    if (error) {
+      console.error("[bloodwork] Failed to delete entry", { reportId: deleteId, error });
+      setNotice({ type: "error", message: error });
+      return;
+    }
+
     setDeleteId(null);
+    setNotice({ type: "success", message: "Bloodwork entry deleted." });
   }
 
   return (
@@ -75,6 +94,21 @@ export function BloodworkDashboardView() {
           </>
         }
       />
+
+      {notice && (
+        <div
+          role={notice.type === "error" ? "alert" : "status"}
+          className={cn(
+            "mb-6 rounded-lg border px-4 py-3 text-sm flex items-center gap-2",
+            notice.type === "success"
+              ? "border-primary/30 bg-primary/10 text-foreground"
+              : "border-accent/30 bg-accent/10 text-accent"
+          )}
+        >
+          {notice.type === "success" && <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
+          {notice.message}
+        </div>
+      )}
 
       {/* Stats row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -197,9 +231,13 @@ export function BloodworkDashboardView() {
         )}
 
         {!isLoading && latestReport && (
-          <Card variant="elevated" hover padding="lg" className="group cursor-pointer" onClick={() => router.push(`/bloodwork/reports/${latestReport.id}`)}>
+          <Card variant="elevated" hover padding="lg" className="group">
             <div className="flex items-start justify-between gap-4">
-              <div className="flex-1 min-w-0">
+              <button
+                type="button"
+                className="flex-1 min-w-0 text-left cursor-pointer"
+                onClick={() => router.push(`/bloodwork/reports/${latestReport.id}`)}
+              >
                 <div className="flex flex-wrap items-center gap-2 mb-2">
                   <h3 className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
                     {latestReport.report_name}
@@ -251,8 +289,16 @@ export function BloodworkDashboardView() {
                     )}
                   </div>
                 )}
+              </button>
+              <div className="flex flex-col items-end gap-2 shrink-0">
+                <BloodworkDeleteButton
+                  reportId={latestReport.id}
+                  isDeleting={isDeleting}
+                  deletingId={deleteId}
+                  onDeleteRequest={openDeleteDialog}
+                />
+                <ChevronRight className="h-5 w-5 text-muted group-hover:text-primary transition-colors" />
               </div>
-              <ChevronRight className="h-5 w-5 text-muted group-hover:text-primary transition-colors shrink-0" />
             </div>
           </Card>
         )}
@@ -296,17 +342,12 @@ export function BloodworkDashboardView() {
                       )}
                     </p>
                   </Link>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDeleteId(report.id);
-                      setDeleteName(report.report_name);
-                    }}
-                    className="text-muted hover:text-accent p-1"
-                    aria-label="Delete report"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <BloodworkDeleteButton
+                    reportId={report.id}
+                    isDeleting={isDeleting}
+                    deletingId={deleteId}
+                    onDeleteRequest={openDeleteDialog}
+                  />
                 </div>
               </Card>
             ))}
@@ -316,13 +357,24 @@ export function BloodworkDashboardView() {
 
       <Modal
         isOpen={!!deleteId}
-        onClose={() => setDeleteId(null)}
-        title="Delete report?"
-        description={`"${deleteName}" and all associated results will be permanently removed.`}
+        onClose={() => {
+          if (!isDeleting) setDeleteId(null);
+        }}
+        title="Delete bloodwork?"
+        description="Are you sure you want to delete this bloodwork entry? This cannot be undone."
         footer={
           <>
-            <Button variant="ghost" onClick={() => setDeleteId(null)}>Cancel</Button>
-            <Button variant="danger" onClick={confirmDelete} isLoading={isDeleting}>Delete</Button>
+            <Button variant="ghost" onClick={() => setDeleteId(null)} disabled={isDeleting}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={confirmDelete}
+              disabled={isDeleting}
+              isLoading={isDeleting}
+            >
+              {isDeleting ? "Deleting…" : "Delete"}
+            </Button>
           </>
         }
       />
