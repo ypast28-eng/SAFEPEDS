@@ -2,11 +2,28 @@ import type { ParsedBloodworkMarker } from "@/lib/bloodwork/parseBloodworkPdf";
 import { toBloodworkStatus } from "@/lib/bloodwork/detect-marker-status";
 import type { BloodMarker, BloodworkResultInput } from "@/types/bloodwork";
 import { matchExtractedMarkers, type RawExtractedMarker } from "@/lib/bloodwork/match-markers";
+import { prepareMarkersForInsert } from "@/lib/bloodwork/validate-markers";
 
 export function parsedMarkerToRaw(marker: ParsedBloodworkMarker): RawExtractedMarker {
+  if (marker.numeric_value == null) {
+    return {
+      name: marker.marker,
+      value: Number.NaN,
+      unit: marker.unit,
+      reference_low: marker.range_low,
+      reference_high: marker.range_high,
+      panel: marker.panel,
+      result_text: marker.result,
+      comparator: marker.comparator,
+      flag: marker.flag,
+      reference_range: marker.reference_range,
+      parsed_status: marker.status,
+    };
+  }
+
   return {
     name: marker.marker,
-    value: marker.numeric_value ?? 0,
+    value: marker.numeric_value,
     unit: marker.unit,
     reference_low: marker.range_low,
     reference_high: marker.range_high,
@@ -25,8 +42,7 @@ export function parsedMarkersToInputs(
 ): BloodworkResultInput[] {
   const raw = parsed.map(parsedMarkerToRaw);
   const matched = matchExtractedMarkers(raw, catalog);
-
-  return matched.map((m) => ({
+  const mapped = matched.map((m) => ({
     panel: m.category,
     marker: m.marker_name,
     result: m.result_text ?? String(m.result_value),
@@ -45,6 +61,8 @@ export function parsedMarkersToInputs(
     flag: m.flag,
     reference_range: m.reference_range,
   }));
+
+  return prepareMarkersForInsert(mapped).valid;
 }
 
 export function buildExtractionSnapshot(parsed: ParsedBloodworkMarker[]) {

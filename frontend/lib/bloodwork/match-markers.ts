@@ -39,39 +39,63 @@ const ALIASES: Record<string, string> = {
   "alanine aminotransferase": "ALT",
   sgot: "AST",
   "aspartate aminotransferase": "AST",
+  ggt: "GGT",
+  "gamma gt": "GGT",
   "gamma glutamyl transferase": "GGT",
   "gamma-glutamyl transferase": "GGT",
   "alkaline phosphatase": "ALP",
   "total bilirubin": "Bilirubin",
   bilirubin: "Bilirubin",
+  albumin: "Albumin",
   "blood urea nitrogen": "Urea",
   bun: "Urea",
+  creatinine: "Creatinine",
   "total cholesterol": "Total Cholesterol",
   "cholesterol total": "Total Cholesterol",
   cholesterol: "Total Cholesterol",
   "hdl cholesterol": "HDL",
   "hdl-c": "HDL",
+  hdl: "HDL",
   "ldl cholesterol": "LDL",
   "ldl-c": "LDL",
-  "triglyceride": "Triglycerides",
+  ldl: "LDL",
+  triglyceride: "Triglycerides",
+  triglycerides: "Triglycerides",
   tg: "Triglycerides",
   "testosterone total": "Total Testosterone",
   "total testosterone": "Total Testosterone",
+  testosterone: "Total Testosterone",
   "testosterone free": "Free Testosterone",
   "free testosterone": "Free Testosterone",
   e2: "Estradiol",
   estradiol: "Estradiol",
+  oestradiol: "Estradiol",
   "sex hormone binding globulin": "SHBG",
+  shbg: "SHBG",
+  prolactin: "Prolactin",
+  prl: "Prolactin",
+  lh: "LH",
+  "luteinising hormone": "LH",
+  "luteinizing hormone": "LH",
+  fsh: "FSH",
+  "follicle stimulating hormone": "FSH",
+  haemoglobin: "Hemoglobin",
+  hemoglobin: "Hemoglobin",
+  hgb: "Hemoglobin",
+  haematocrit: "Hematocrit",
+  hematocrit: "Hematocrit",
+  hct: "Hematocrit",
   "white blood cell": "WBC",
   "white blood cells": "WBC",
+  wbc: "WBC",
   leukocytes: "WBC",
   "red blood cell": "RBC",
   "red blood cells": "RBC",
+  rbc: "RBC",
   erythrocytes: "RBC",
   "platelet count": "Platelets",
+  platelets: "Platelets",
   plt: "Platelets",
-  hgb: "Hemoglobin",
-  hct: "Hematocrit",
   "estimated gfr": "eGFR",
   egfr: "eGFR",
   "c reactive protein": "CRP",
@@ -79,6 +103,7 @@ const ALIASES: Record<string, string> = {
   hba1c: "HbA1c",
   "hemoglobin a1c": "HbA1c",
   "prostate specific antigen": "PSA",
+  psa: "PSA",
 };
 
 function normalize(name: string): string {
@@ -120,16 +145,22 @@ export function matchExtractedMarkers(
   catalog: BloodMarker[]
 ): MatchedExtractedMarker[] {
   return raw
-    .filter((item) => item.name.trim() && Number.isFinite(item.value))
+    .filter((item) => {
+      const name = item.name?.trim();
+      return Boolean(name) && Number.isFinite(item.value);
+    })
     .map((item) => {
-      const marker = findCatalogMarker(item.name, catalog);
+      const rawName = item.name.trim();
+      const marker = findCatalogMarker(rawName, catalog);
+      const resolvedName = marker?.name ?? resolveCatalogName(rawName);
+      const markerName = resolvedName.trim() || rawName;
       const status =
         item.parsed_status != null
           ? toBloodworkStatus(item.parsed_status)
           : null;
 
       return {
-        marker_name: marker?.name ?? item.name.trim(),
+        marker_name: markerName,
         category: item.panel?.trim() || marker?.category || "Other",
         result_value: item.value,
         unit: item.unit?.trim() || marker?.default_unit || "",
@@ -137,12 +168,13 @@ export function matchExtractedMarkers(
         reference_high: item.reference_high ?? marker?.default_reference_high ?? null,
         status,
         marker_id: marker?.id ?? null,
-        raw_name: item.name.trim(),
+        raw_name: rawName,
         matched: Boolean(marker),
-        result_text: item.result_text ?? null,
+        result_text: item.result_text?.trim() ?? null,
         comparator: item.comparator ?? null,
         flag: item.flag ?? null,
-        reference_range: item.reference_range ?? null,
+        reference_range: item.reference_range?.trim() ?? null,
       };
-    });
+    })
+    .filter((item) => item.marker_name.trim().length > 0);
 }

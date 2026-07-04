@@ -3,7 +3,7 @@ import { normalizeBloodworkResult } from "@/lib/bloodwork/normalize-result";
 import { bloodworkResultToDbFields, toBloodworkResultRow } from "@/lib/bloodwork/result-row";
 
 describe("bloodwork result row mapping", () => {
-  it("maps structured inputs to canonical database columns only", () => {
+  it("maps structured inputs to structured and legacy NOT NULL database columns", () => {
     const row = toBloodworkResultRow("report-1", "user-1", {
       marker_name: "ALT",
       category: "Liver",
@@ -17,27 +17,44 @@ describe("bloodwork result row mapping", () => {
       reference_range: "10 - 40",
     });
 
-    expect(row).toEqual({
+    expect(row).toMatchObject({
       report_id: "report-1",
       user_id: "user-1",
       panel: "Liver",
       marker: "ALT",
+      marker_name: "ALT",
+      category: "Liver",
       result: "42",
+      result_text: "42",
       numeric_value: 42,
+      result_value: 42,
       comparator: null,
       flag: "H",
       unit: "U/L",
       reference_range: "10 - 40",
       range_low: 10,
       range_high: 40,
+      reference_low: 10,
+      reference_high: 40,
       status: "High",
     });
-    expect(row).not.toHaveProperty("marker_name");
-    expect(row).not.toHaveProperty("category");
-    expect(row).not.toHaveProperty("result_value");
-    expect(row).not.toHaveProperty("reference_low");
-    expect(row).not.toHaveProperty("reference_high");
-    expect(row).not.toHaveProperty("result_text");
+  });
+
+  it("never leaves legacy NOT NULL columns empty", () => {
+    const fields = bloodworkResultToDbFields({
+      marker_name: "Creatinine",
+      category: "Kidney",
+      result_value: 90,
+      unit: "",
+      reference_low: 60,
+      reference_high: 110,
+    });
+
+    expect(fields.marker_name).toBe("Creatinine");
+    expect(fields.category).toBe("Kidney");
+    expect(fields.result_value).toBe(90);
+    expect(fields.unit).toBe("");
+    expect(fields.marker).toBe("Creatinine");
   });
 
   it("normalizes legacy database rows into app-facing aliases", () => {

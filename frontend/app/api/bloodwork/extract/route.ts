@@ -5,16 +5,18 @@ import {
   isOpenAiExtractionConfigured,
   OPENAI_SETUP_INSTRUCTIONS,
 } from "@/lib/ai/extraction-config";
-import { matchExtractedMarkers } from "@/lib/bloodwork/match-markers";
+import { formatBloodworkInsertError } from "@/lib/bloodwork/db-errors";
+import { runExtractionPipeline } from "@/lib/bloodwork/extraction-pipeline";
 import { buildExtractionSnapshot, parsedMarkerToRaw } from "@/lib/bloodwork/parsed-to-result";
-import { parseBloodworkPdfBuffer } from "@/lib/bloodwork/parseBloodworkPdf";
-import { toBloodworkResultRow } from "@/lib/bloodwork/result-row";
+import { parseBloodworkPdfText } from "@/lib/bloodwork/parseBloodworkPdf";
+import { toBloodworkResultRows } from "@/lib/bloodwork/result-row";
 import { getReportStoragePath } from "@/lib/bloodwork/upload";
 import type { BloodMarker } from "@/types/bloodwork";
 
 export const runtime = "nodejs";
 
 const BUCKET = "bloodwork-reports";
+const NO_MARKERS_MESSAGE = "No blood markers could be extracted from this PDF.";
 
 function resolveFileUrl(report: {
   file_url?: string | null;
@@ -156,15 +158,61 @@ export async function POST(request: Request) {
 
     let rawMarkers;
     let parser: "pdf" | "openai" = "openai";
-    let structuredSnapshot;
+    let structuredSnapshot: ReturnType<typeof buildExtractionSnapshot> = [];
 
     if (pdf) {
-      const parsed = await parseBloodworkPdfBuffer(buffer);
-      rawMarkers = parsed.map(parsedMarkerToRaw);
-      structuredSnapshot = buildExtractionSnapshot(parsed);
+      const pdfParse = (await import("pdf-parse")).default;
+      const parsedPdf = await pdfParse(buffer);
+      const pdfText = parsedPdf.text ?? "";
+      const parsedMarkers = parseBloodworkPdfText(pdfText);
+
+      console.log("[bloodwork/extract] PDF parser response", {
+        reportId,
+        textLength: pdfText.length,
+        textPreview: pdfText.slice(0, 500),
+        parsedMarkerCount: parsedMarkers.length,
+        parsedMarkers,
+      });
+
+      if (parsedMarkers.length === 0) {
+        console.log("[bloodwork/extract] Extracted markers:", []);
+        console.log("[bloodwork/extract] Mapped markers:", []);
+        console.log("[bloodwork/extract] Markers being inserted:", []);
+        return NextResponse.json(
+          {
+            code: "no_markers",
+            error: NO_MARKERS_MESSAGE,
+            message: NO_MARKERS_MESSAGE,
+          },
+          { status: 422 }
+        );
+      }
+
+      rawMarkers = parsedMarkers.map(parsedMarkerToRaw);
+      structuredSnapshot = buildExtractionSnapshot(parsedMarkers);
       parser = "pdf";
     } else {
       rawMarkers = await extractMarkersFromFile(buffer, mimeType, fileName);
+      console.log("[bloodwork/extract] OpenAI parser response", {
+        reportId,
+        rawMarkerCount: rawMarkers.length,
+        rawMarkers,
+      });
+
+      if (rawMarkers.length === 0) {
+        console.log("[bloodwork/extract] Extracted markers:", []);
+        console.log("[bloodwork/extract] Mapped markers:", []);
+        console.log("[bloodwork/extract] Markers being inserted:", []);
+        return NextResponse.json(
+          {
+            code: "no_markers",
+            error: "No blood markers could be extracted from this file.",
+            message: "No blood markers could be extracted from this file.",
+          },
+          { status: 422 }
+        );
+      }
+
       structuredSnapshot = rawMarkers.map((m) => ({
         panel: "General",
         marker: m.name,
@@ -183,53 +231,60 @@ export async function POST(request: Request) {
                 : "",
         range_low: m.reference_low,
         range_high: m.reference_high,
-        status: "unknown",
+        status: "unknown" as const,
         bloodwork_status: null,
       }));
     }
 
-    const markers = matchExtractedMarkers(rawMarkers, (catalog ?? []) as BloodMarker[]);
-    const matchedCount = markers.filter((m) => m.matched).length;
-    const warnings: string[] = [];
+    console.log("Extracted markers:", rawMarkers);
 
-    if (matchedCount < markers.length) {
+    const pipeline = runExtractionPipeline(rawMarkers, (catalog ?? []) as BloodMarker[]);
+    const { matched, mappedMarkers, validMarkers, skipped, matchedCount } = pipeline;
+
+    console.log("Mapped markers:", mappedMarkers);
+
+    const warnings: string[] = [];
+    if (matchedCount < matched.length) {
       warnings.push(
-        `${markers.length - matchedCount} marker(s) could not be matched to the catalog — names were preserved from the PDF.`
+        `${matched.length - matchedCount} marker(s) could not be matched to the catalog — names were preserved from the PDF.`
+      );
+    }
+    if (skipped.length > 0) {
+      warnings.push(
+        `${skipped.length} marker(s) were skipped because they were invalid or duplicated.`
+      );
+      console.log("[bloodwork/extract] Skipped markers", skipped);
+    }
+
+    if (validMarkers.length === 0) {
+      console.log("Markers being inserted:", []);
+      return NextResponse.json(
+        {
+          code: "no_markers",
+          error: pdf ? NO_MARKERS_MESSAGE : "No blood markers could be extracted from this file.",
+          message: pdf ? NO_MARKERS_MESSAGE : "No blood markers could be extracted from this file.",
+          warnings,
+        },
+        { status: 422 }
       );
     }
 
-    const resultInputs = markers.map((m) => ({
-      panel: m.category,
-      marker: m.marker_name,
-      result: m.result_text ?? String(m.result_value),
-      numeric_value: m.result_value,
-      range_low: m.reference_low,
-      range_high: m.reference_high,
-      marker_name: m.marker_name,
-      category: m.category,
-      result_value: m.result_value,
-      unit: m.unit,
-      reference_low: m.reference_low,
-      reference_high: m.reference_high,
-      status: m.status,
-      result_text: m.result_text,
-      comparator: m.comparator,
-      flag: m.flag,
-      reference_range: m.reference_range,
-    }));
+    const rowsToInsert = toBloodworkResultRows(reportId, user.id, validMarkers);
+    console.log("Markers being inserted:", rowsToInsert);
 
     await supabase.from("bloodwork_results").delete().eq("report_id", reportId);
 
-    if (resultInputs.length > 0) {
-      const rows = resultInputs.map((r) => toBloodworkResultRow(reportId, user.id, r));
-      const { error: insertError } = await supabase.from("bloodwork_results").insert(rows);
-      if (insertError) {
-        console.error("[bloodwork/extract] failed to save markers", {
-          reportId,
-          error: insertError,
-        });
-        return NextResponse.json({ error: insertError.message }, { status: 500 });
-      }
+    const { error: insertError } = await supabase.from("bloodwork_results").insert(rowsToInsert);
+    if (insertError) {
+      console.error("[bloodwork/extract] failed to save markers", {
+        reportId,
+        error: insertError,
+        rowsToInsert,
+      });
+      return NextResponse.json(
+        { error: formatBloodworkInsertError(insertError.message) },
+        { status: 500 }
+      );
     }
 
     await supabase
@@ -256,7 +311,7 @@ export async function POST(request: Request) {
     }));
 
     return NextResponse.json({
-      markers: markers.map((m) => ({
+      markers: matched.map((m) => ({
         marker_name: m.marker_name,
         category: m.category,
         result_value: m.result_value,
@@ -274,7 +329,7 @@ export async function POST(request: Request) {
       })),
       structured_markers,
       warnings,
-      extractedCount: markers.length,
+      extractedCount: validMarkers.length,
       matchedCount,
       saved: true,
       parser,
