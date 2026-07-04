@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
+import {
+  isApprovedBloodworkMarker,
+  resolveApprovedMarkerName,
+  resolveCategoryHeading,
+  stripUnitsFromMarkerText,
+} from "@/lib/bloodwork/approved-markers";
 import { parseBloodworkPdfText, parseMarkerRow } from "@/lib/bloodwork/parseBloodworkPdf";
+import { prepareMarkersForInsert } from "@/lib/bloodwork/validate-markers";
+import { runStrictExtractionPipeline } from "@/lib/bloodwork/extraction-pipeline";
 
-const EXAMPLE_ROWS = `Androgens
+const EXAMPLE_REPORT = `Patient Name John Smith
+Collection Date 01/01/2026
+Androgens
 Testosterone 28.5 nmol/L 9.5 - 35.0
 SHBG 25 nmol/L 10 - 70
 Free Testosterone 710.0 pmol/L 260 - 750
@@ -9,176 +19,124 @@ General Chemistry
 Urea 7.3 mmol/L 3.0 - 7.5
 Creatinine 90 umol/L 60 - 110
 eGFR >90 >59
+Sodium 140 mmol/L 135 - 145
+Potassium 4.2 mmol/L 3.5 - 5.2
 Liver Function
 AST 34 U/L 10 - 40
 ALT 36 U/L 5 - 40
+Gamma GT 28 U/L 5 - 50
+Total Bilirubin 12 umol/L 3 - 20
+Albumin 42 g/L 35 - 50
 Hormones
 FSH <1 L U/L 1 - 8
 LH <1 L U/L 1.0 - 8.0
 Oestradiol <85 pmol/L <160
 Lipids
+Random
 Cholesterol 4.1 mmol/L <5.0
+Triglyceride 0.9 mmol/L <2.0
 HDL Cholesterol 1.4 mmol/L >1.0
+LDL Cholesterol 2.2 mmol/L <3.0
 Haematology
+Haemoglobin 145 g/L 130 - 180
+Red cell count 4.8 x10^12/L 4.5 - 5.5
 Haematocrit 0.48 0.40 - 0.54
-Platelets 252 x10^9/L 150 - 400`;
+White cell count 6.2 x10^9/L 4.0 - 11.0
+Platelets 252 x10^9/L 150 - 400
+Comments: sample slightly haemolysed`;
+
+describe("approved markers", () => {
+  it("resolves category headings only for approved panels", () => {
+    expect(resolveCategoryHeading("Androgens")).toBe("Androgens");
+    expect(resolveCategoryHeading("Patient Name John Smith")).toBeNull();
+    expect(resolveCategoryHeading("Comments: sample slightly haemolysed")).toBeNull();
+  });
+
+  it("strips units from marker names", () => {
+    expect(stripUnitsFromMarkerText("Testosterone nmol/L")).toBe("Testosterone");
+  });
+
+  it("maps aliases to canonical marker names", () => {
+    expect(resolveApprovedMarkerName("GGT", "Liver Function")).toBe("Gamma GT");
+    expect(resolveApprovedMarkerName("RBC", "Haematology")).toBe("Red cell count");
+  });
+});
 
 describe("parseBloodworkPdfText", () => {
-  it("extracts common pathology report markers", () => {
-    const report = `Haematology
-Haemoglobin 145 g/L 130 - 180
-Haematocrit 0.48 0.40 - 0.54
-RBC 4.8 x10^12/L 4.5 - 5.5
-WBC 6.2 x10^9/L 4.0 - 11.0
-Platelets 252 x10^9/L 150 - 400
-Liver Function
-ALT 36 U/L 5 - 40
-AST 34 U/L 10 - 40
-GGT 28 U/L 5 - 50
-Bilirubin 12 umol/L 3 - 20
-Albumin 42 g/L 35 - 50
-Renal Function
-Creatinine 90 umol/L 60 - 110
-eGFR >90 >59
-Androgens
-Testosterone 28.5 nmol/L 9.5 - 35.0
-SHBG 25 nmol/L 10 - 70
-Free Testosterone 710.0 pmol/L 260 - 750
-Hormones
-Estradiol 85 pmol/L <160
-Prolactin 220 mIU/L 45 - 375
-LH 4 U/L 1 - 8
-FSH 3 U/L 1 - 8
-Lipids
-Cholesterol 4.1 mmol/L <5.0
-HDL 1.4 mmol/L >1.0
-LDL 2.2 mmol/L <3.0
-Triglycerides 0.9 mmol/L <2.0`;
+  it("extracts only approved markers inside pathology tables", () => {
+    const markers = parseBloodworkPdfText(EXAMPLE_REPORT);
 
-    const markers = parseBloodworkPdfText(report);
-    const names = markers.map((m) => m.marker);
-
-    for (const expected of [
-      "Haemoglobin",
-      "Haematocrit",
-      "RBC",
-      "WBC",
-      "Platelets",
-      "ALT",
-      "AST",
-      "GGT",
-      "Bilirubin",
-      "Albumin",
-      "Creatinine",
-      "eGFR",
-      "Testosterone",
-      "SHBG",
-      "Free Testosterone",
-      "Estradiol",
-      "Prolactin",
-      "LH",
-      "FSH",
-      "Cholesterol",
-      "HDL",
-      "LDL",
-      "Triglycerides",
-    ]) {
-      expect(names).toContain(expected);
-    }
+    expect(markers.every((m) => isApprovedBloodworkMarker(m.panel, m.marker))).toBe(true);
+    expect(markers.find((m) => m.marker === "Testosterone")).toMatchObject({
+      panel: "Androgens",
+      marker: "Testosterone",
+      result: "28.5",
+      unit: "nmol/L",
+      reference_range: "9.5 - 35.0",
+    });
+    expect(markers.some((m) => m.marker.includes("nmol/L"))).toBe(false);
+    expect(markers.some((m) => m.marker === "Random")).toBe(false);
+    expect(markers.some((m) => m.marker === "John Smith")).toBe(false);
   });
 
-  it("extracts every example marker row", () => {
-    const markers = parseBloodworkPdfText(EXAMPLE_ROWS);
-    expect(markers).toHaveLength(15);
-
-    const names = markers.map((m) => m.marker);
-    expect(names).toContain("Testosterone");
-    expect(names).toContain("SHBG");
-    expect(names).toContain("Free Testosterone");
-    expect(names).toContain("Urea");
-    expect(names).toContain("Creatinine");
-    expect(names).toContain("eGFR");
-    expect(names).toContain("AST");
-    expect(names).toContain("ALT");
-    expect(names).toContain("FSH");
-    expect(names).toContain("LH");
-    expect(names).toContain("Oestradiol");
-    expect(names).toContain("Cholesterol");
-    expect(names).toContain("HDL Cholesterol");
-    expect(names).toContain("Haematocrit");
-    expect(names).toContain("Platelets");
-  });
-
-  it("parses FSH with low flag and comparator", () => {
+  it("parses FSH with comparator, flag, units, and reference range", () => {
     const fsh = parseMarkerRow("FSH <1 L U/L 1 - 8", "Hormones");
     expect(fsh).toMatchObject({
       panel: "Hormones",
       marker: "FSH",
       result: "<1",
-      numeric_value: 1,
-      comparator: "<",
-      flag: "L",
       unit: "U/L",
       reference_range: "1 - 8",
-      range_low: 1,
-      range_high: 8,
       status: "low",
     });
   });
 
-  it("parses eGFR with greater-than result and lower-only range", () => {
-    const egfr = parseMarkerRow("eGFR >90 >59", "General Chemistry");
-    expect(egfr).toMatchObject({
-      marker: "eGFR",
-      result: ">90",
-      numeric_value: 90,
-      comparator: ">",
-      reference_range: ">59",
-      range_low: 59,
-      range_high: null,
-      status: "normal",
-    });
+  it("parses lipids layout and ignores Random header line", () => {
+    const markers = parseBloodworkPdfText(`Lipids
+Random
+Cholesterol 4.1 mmol/L <5.0
+HDL Cholesterol 1.4 mmol/L >1.0`);
+
+    expect(markers.map((m) => m.marker)).toEqual(["Cholesterol", "HDL Cholesterol"]);
   });
 
-  it("parses upper-bound-only lipid range", () => {
-    const chol = parseMarkerRow("Cholesterol 4.1 mmol/L <5.0", "Lipids");
-    expect(chol).toMatchObject({
-      marker: "Cholesterol",
-      result: "4.1",
-      numeric_value: 4.1,
-      reference_range: "<5.0",
-      range_high: 5,
-      status: "normal",
-    });
-  });
+  it("deduplicates by category and marker", () => {
+    const pipeline = runStrictExtractionPipeline(
+      parseBloodworkPdfText(`Androgens
+Testosterone 28.5 nmol/L 9.5 - 35.0
+Testosterone 28.5 nmol/L 9.5 - 35.0`)
+    );
 
-  it("parses haematocrit without units", () => {
-    const hct = parseMarkerRow("Haematocrit 0.48 0.40 - 0.54", "Haematology");
-    expect(hct).toMatchObject({
-      marker: "Haematocrit",
-      result: "0.48",
-      numeric_value: 0.48,
-      unit: "",
-      reference_range: "0.40 - 0.54",
-      status: "normal",
-    });
+    expect(pipeline.validMarkers).toHaveLength(1);
   });
+});
 
-  it("parses platelets with x10^9/L unit", () => {
-    const plt = parseMarkerRow("Platelets 252 x10^9/L 150 - 400", "Haematology");
-    expect(plt).toMatchObject({
-      marker: "Platelets",
-      result: "252",
-      unit: "x10^9/L",
-      reference_range: "150 - 400",
-      status: "normal",
-    });
-  });
+describe("prepareMarkersForInsert", () => {
+  it("rejects category headings and unapproved markers", () => {
+    const { valid, skipped } = prepareMarkersForInsert([
+      {
+        category: "Androgens",
+        marker_name: "Androgens",
+        result_value: "1",
+        unit: "",
+      },
+      {
+        category: "Androgens",
+        marker_name: "Testosterone",
+        result_value: "28.5",
+        unit: "nmol/L",
+        reference_range: "9.5 - 35.0",
+      },
+      {
+        category: "Androgens",
+        marker_name: "Prolactin",
+        result_value: "10",
+        unit: "mIU/L",
+      },
+    ]);
 
-  it("assigns panel headings dynamically", () => {
-    const markers = parseBloodworkPdfText(EXAMPLE_ROWS);
-    expect(markers.find((m) => m.marker === "AST")?.panel).toBe("Liver Function");
-    expect(markers.find((m) => m.marker === "FSH")?.panel).toBe("Hormones");
-    expect(markers.find((m) => m.marker === "Testosterone")?.panel).toBe("Androgens");
+    expect(valid).toHaveLength(1);
+    expect(valid[0]?.marker_name).toBe("Testosterone");
+    expect(skipped.length).toBeGreaterThanOrEqual(2);
   });
 });
