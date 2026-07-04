@@ -8,7 +8,7 @@ import {
 import { formatBloodworkInsertError } from "@/lib/bloodwork/db-errors";
 import { runStrictExtractionPipeline } from "@/lib/bloodwork/extraction-pipeline";
 import { buildExtractionSnapshot } from "@/lib/bloodwork/parsed-to-result";
-import { parseBloodworkPdfText } from "@/lib/bloodwork/parseBloodworkPdf";
+import { extractSectionTables, parseBloodworkPdfText } from "@/lib/bloodwork/parseBloodworkPdf";
 import { prepareMarkersForInsert } from "@/lib/bloodwork/validate-markers";
 import { toBloodworkResultRows } from "@/lib/bloodwork/result-row";
 import { getReportStoragePath } from "@/lib/bloodwork/upload";
@@ -160,12 +160,13 @@ export async function POST(request: Request) {
       const pdfParse = (await import("pdf-parse")).default;
       const parsedPdf = await pdfParse(buffer);
       rawText = parsedPdf.text ?? "";
+      const extractedTables = extractSectionTables(rawText);
       extractedMarkers = parseBloodworkPdfText(rawText);
       structuredSnapshot = buildExtractionSnapshot(extractedMarkers);
       parser = "pdf";
 
-      console.log("Raw OCR text:", rawText);
-      console.log("Extracted markers:", extractedMarkers);
+      console.log("RAW PDF TEXT:", rawText);
+      console.log("RAW EXTRACTED TABLES:", extractedTables);
 
       const pipeline = runStrictExtractionPipeline(extractedMarkers);
       mappedMarkers = pipeline.mappedMarkers;
@@ -200,8 +201,8 @@ export async function POST(request: Request) {
       validMarkers = prepared.valid;
     }
 
-    console.log("Mapped markers:", mappedMarkers);
-    console.log("Validated markers:", validatedMarkers);
+    console.log("Mapped markers before insert:", mappedMarkers);
+    console.log("Valid markers to insert:", validMarkers);
     console.log("Skipped markers:", skippedMarkers);
 
     const warnings: string[] = [];

@@ -28,7 +28,19 @@ export interface BloodworkResultDbRow {
 export function bloodworkResultToDbFields(
   result: BloodworkResultInput
 ): Omit<BloodworkResultDbRow, "report_id" | "user_id"> {
-  const numericValue = result.numeric_value ?? result.result_value;
+  const displayResult =
+    result.result?.trim() ||
+    result.result_text?.trim() ||
+    (result.result_value != null ? String(result.result_value) : "");
+
+  let numericValue = result.numeric_value ?? result.result_value;
+  if (!Number.isFinite(numericValue)) {
+    const parsed = displayResult.match(/^([<>]=?)\s*(\d+\.?\d*)/);
+    if (parsed) {
+      numericValue = Number(parsed[2]);
+    }
+  }
+
   if (!Number.isFinite(numericValue)) {
     throw new Error(`Invalid numeric result for marker "${result.marker_name ?? result.marker ?? "unknown"}"`);
   }
@@ -41,10 +53,6 @@ export function bloodworkResultToDbFields(
     throw new Error("marker_name is required");
   }
 
-  const displayResult =
-    result.result?.trim() ||
-    result.result_text?.trim() ||
-    String(numericValue);
   const unit = result.unit?.trim() ?? "";
   const status =
     result.status !== undefined

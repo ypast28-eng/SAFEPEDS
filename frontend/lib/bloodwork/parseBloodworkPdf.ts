@@ -1,10 +1,13 @@
 import { detectMarkerStatus, type ParsedMarkerStatus } from "@/lib/bloodwork/detect-marker-status";
 import {
   type ApprovedBloodworkCategory,
+  APPROVED_BLOODWORK_CATEGORIES,
+  getMarkerSearchPatterns,
   isJunkTableLine,
   resolveApprovedMarkerName,
   resolveCategoryHeading,
   stripUnitsFromMarkerText,
+  toDisplayMarkerName,
 } from "@/lib/bloodwork/approved-markers";
 
 export interface ParsedBloodworkMarker {
@@ -14,11 +17,16 @@ export interface ParsedBloodworkMarker {
   numeric_value: number | null;
   comparator: "<" | ">" | "<=" | ">=" | null;
   flag: "H" | "L" | null;
-  unit: string;
+  unit: string | null;
   reference_range: string;
   range_low: number | null;
   range_high: number | null;
   status: ParsedMarkerStatus;
+}
+
+export interface ExtractedSectionTable {
+  category: ApprovedBloodworkCategory;
+  lines: string[];
 }
 
 const UNIT_PATTERN =
@@ -27,6 +35,9 @@ const UNIT_PATTERN =
 const RANGE_BOTH = /^(\d+\.?\d*)\s*-\s*(\d+\.?\d*)\s*$/;
 const RANGE_UPPER = /^([<>]=?)\s*(\d+\.?\d*)\s*$/;
 const RANGE_LOWER = /^>\s*(\d+\.?\d*)\s*$/;
+
+const RESULT_TOKEN =
+  /^(?:([<>]=?)\s*(\d+\.?\d*)(?:\s+([HL]))?|(\d+\.?\d*))\s*(.*)$/i;
 
 function normalizeText(text: string): string {
   return text
@@ -112,56 +123,131 @@ function extractReferenceFromEnd(line: string): {
   };
 }
 
-function extractUnitFromEnd(line: string): { remainder: string; unit: string } {
-  const match = line.match(new RegExp(`^(.*?)\\s+(${UNIT_PATTERN.source})$`, "i"));
+function extractUnitToken(line: string): { remainder: string; unit: string | null } {
+  const match = line.match(new RegExp(`^(.*?)\\s+(${UNIT_PATTERN.source})\\s*$`, "i"));
   if (match) {
     return { remainder: match[1].trim(), unit: match[2] };
   }
-  return { remainder: line.trim(), unit: "" };
+  return { remainder: line.trim(), unit: null };
 }
 
-function extractFlagFromEnd(line: string): { remainder: string; flag: "H" | "L" | null } {
-  const match = line.match(/^(.+?)\s+([HL])\s*$/i);
-  if (match) {
-    return { remainder: match[1].trim(), flag: match[2].toUpperCase() as "H" | "L" };
-  }
-  return { remainder: line.trim(), flag: null };
-}
-
-function extractResultFromEnd(line: string): {
-  marker: string;
+function parseResultToken(raw: string): {
   result: string;
   numeric_value: number | null;
   comparator: "<" | ">" | "<=" | ">=" | null;
-} {
-  const compMatch = line.match(/^(.+?)\s+([<>]=?)\s*(\d+\.?\d*)\s*$/);
-  if (compMatch) {
-    const comparator = compMatch[2] as "<" | ">" | "<=" | ">=";
-    const numeric = Number(compMatch[3]);
+  flag: "H" | "L" | null;
+  remainder: string;
+} | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  const match = trimmed.match(RESULT_TOKEN);
+  if (!match) return null;
+
+  if (match[1] != null && match[2] != null) {
+    const comparator = match[1] as "<" | ">" | "<=" | ">=";
+    const numeric = Number(match[2]);
+    const flag = match[3]?.toUpperCase() as "H" | "L" | undefined;
+    const result = flag ? `${comparator}${match[2]} ${flag}` : `${comparator}${match[2]}`;
     return {
-      marker: compMatch[1].trim(),
-      result: `${comparator}${compMatch[3]}`,
+      result,
       numeric_value: Number.isFinite(numeric) ? numeric : null,
       comparator,
+      flag: flag ?? null,
+      remainder: match[4]?.trim() ?? "",
     };
   }
 
-  const valueMatch = line.match(/^(.+?)\s+(\d+\.?\d*)\s*$/);
-  if (valueMatch) {
-    const numeric = Number(valueMatch[2]);
+  if (match[4] != null) {
+    const numeric = Number(match[4]);
     return {
-      marker: valueMatch[1].trim(),
-      result: valueMatch[2],
+      result: match[4],
       numeric_value: Number.isFinite(numeric) ? numeric : null,
       comparator: null,
+      flag: null,
+      remainder: match[5]?.trim() ?? "",
     };
   }
 
+  return null;
+}
+
+function findMarkerPrefix(
+  line: string,
+  category: ApprovedBloodworkCategory
+): { canonical: string; remainder: string } | null {
+  const cleaned = stripUnitsFromMarkerText(line.replace(/\s+/g, " ").trim());
+  const patterns = getMarkerSearchPatterns(category);
+
+  for (const { canonical, pattern } of patterns) {
+    const match = cleaned.match(pattern);
+    if (!match || match.index !== 0) continue;
+    return {
+      canonical,
+      remainder: cleaned.slice(match[0].length).trim(),
+    };
+  }
+
+  const fallback = resolveApprovedMarkerName(cleaned, category);
+  if (fallback) {
+    const markerKey = normalizeBloodworkKey(fallback);
+    const lineKey = normalizeBloodworkKey(cleaned);
+    if (lineKey === markerKey) {
+      return { canonical: fallback, remainder: "" };
+    }
+    if (lineKey.startsWith(`${markerKey} `)) {
+      return {
+        canonical: fallback,
+        remainder: cleaned.slice(cleaned.toLowerCase().indexOf(fallback.toLowerCase()) + fallback.length).trim(),
+      };
+    }
+  }
+
+  return null;
+}
+
+function normalizeBloodworkKey(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/[^a-z0-9/%+-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildParsedMarker(
+  category: ApprovedBloodworkCategory,
+  canonicalMarker: string,
+  result: string,
+  numeric_value: number | null,
+  comparator: "<" | ">" | "<=" | ">=" | null,
+  flag: "H" | "L" | null,
+  unit: string | null,
+  reference_range: string,
+  range_low: number | null,
+  range_high: number | null
+): ParsedBloodworkMarker {
+  const status = detectMarkerStatus({
+    numeric_value,
+    comparator,
+    flag,
+    range_low,
+    range_high,
+    reference_range,
+  });
+
   return {
-    marker: line.trim(),
-    result: "",
-    numeric_value: null,
-    comparator: null,
+    panel: category,
+    marker: toDisplayMarkerName(canonicalMarker),
+    result,
+    numeric_value,
+    comparator,
+    flag,
+    unit: unit?.trim() || null,
+    reference_range,
+    range_low,
+    range_high,
+    status,
   };
 }
 
@@ -176,72 +262,149 @@ export function parseMarkerRow(
   if (isJunkTableLine(cleaned)) return null;
   if (cleaned.toLowerCase() === "random") return null;
 
-  const { remainder: afterRef, ...range } = extractReferenceFromEnd(cleaned);
-  const { remainder: afterUnit, unit } = extractUnitFromEnd(afterRef);
-  const { remainder: afterFlag, flag } = extractFlagFromEnd(afterUnit);
-  const valueParts = extractResultFromEnd(afterFlag);
+  const markerMatch = findMarkerPrefix(cleaned, category);
+  if (!markerMatch) return null;
 
-  const markerRaw = stripUnitsFromMarkerText(valueParts.marker);
-  const canonicalMarker = resolveApprovedMarkerName(markerRaw, category);
-
-  if (!canonicalMarker || valueParts.numeric_value == null || !valueParts.result) {
-    return null;
+  let working = markerMatch.remainder;
+  if (!working) {
+    const withoutName = cleaned.slice(
+      cleaned.toLowerCase().indexOf(markerMatch.canonical.toLowerCase()) +
+        markerMatch.canonical.length
+    ).trim();
+    working = withoutName;
   }
 
-  const status = detectMarkerStatus({
-    numeric_value: valueParts.numeric_value,
-    comparator: valueParts.comparator,
-    flag,
-    range_low: range.range_low,
-    range_high: range.range_high,
-    reference_range: range.reference_range,
-  });
+  const { remainder: afterRef, ...range } = extractReferenceFromEnd(working);
+  const { remainder: afterUnit, unit } = extractUnitToken(afterRef);
+  const parsedResult = parseResultToken(afterUnit);
 
-  return {
-    panel: category,
-    marker: canonicalMarker,
-    result: valueParts.result,
-    numeric_value: valueParts.numeric_value,
-    comparator: valueParts.comparator,
-    flag,
-    unit: unit.trim(),
-    reference_range: range.reference_range,
-    range_low: range.range_low,
-    range_high: range.range_high,
-    status,
-  };
+  if (!parsedResult?.result) return null;
+
+  return buildParsedMarker(
+    category,
+    markerMatch.canonical,
+    parsedResult.result,
+    parsedResult.numeric_value,
+    parsedResult.comparator,
+    parsedResult.flag,
+    unit,
+    range.reference_range,
+    range.range_low,
+    range.range_high
+  );
 }
 
-export function parseBloodworkPdfText(text: string): ParsedBloodworkMarker[] {
+function parseMarkerRowFallback(
+  line: string,
+  category: ApprovedBloodworkCategory
+): ParsedBloodworkMarker | null {
+  const cleaned = line.replace(/\s+/g, " ").trim();
+  if (isJunkTableLine(cleaned)) return null;
+
+  for (const { canonical, pattern } of getMarkerSearchPatterns(category)) {
+    const markerMatch = cleaned.match(new RegExp(`${pattern.source}\\s+(.+)$`, "i"));
+    if (!markerMatch) continue;
+
+    let tail = markerMatch[1].trim();
+    const { remainder: afterRef, ...range } = extractReferenceFromEnd(tail);
+    tail = afterRef;
+    const { remainder: afterUnit, unit } = extractUnitToken(tail);
+    const parsedResult = parseResultToken(afterUnit);
+
+    if (!parsedResult?.result) continue;
+
+    return buildParsedMarker(
+      category,
+      canonical,
+      parsedResult.result,
+      parsedResult.numeric_value,
+      parsedResult.comparator,
+      parsedResult.flag,
+      unit,
+      range.reference_range,
+      range.range_low,
+      range.range_high
+    );
+  }
+
+  return null;
+}
+
+export function extractSectionTables(text: string): ExtractedSectionTable[] {
   const normalized = normalizeText(text);
   const lines = normalized
     .split("\n")
     .map((line) => line.replace(/\s+/g, " ").trim())
     .filter(Boolean);
 
+  const tables: ExtractedSectionTable[] = [];
   let currentCategory: ApprovedBloodworkCategory | null = null;
-  const markers: ParsedBloodworkMarker[] = [];
-  const seen = new Set<string>();
+  let currentLines: string[] = [];
+
+  const flush = () => {
+    if (currentCategory && currentLines.length > 0) {
+      tables.push({ category: currentCategory, lines: [...currentLines] });
+    }
+    currentLines = [];
+  };
 
   for (const line of lines) {
     const heading = resolveCategoryHeading(line);
     if (heading) {
+      flush();
       currentCategory = heading;
       continue;
     }
 
     if (!currentCategory) continue;
-
-    const parsed = parseMarkerRow(line, currentCategory);
-    if (!parsed) continue;
-
-    const key = `${parsed.panel}::${parsed.marker}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    markers.push(parsed);
+    if (!APPROVED_BLOODWORK_CATEGORIES.includes(currentCategory)) continue;
+    currentLines.push(line);
   }
 
-  return markers;
+  flush();
+  return tables;
+}
+
+function dedupeMarkers(markers: ParsedBloodworkMarker[]): ParsedBloodworkMarker[] {
+  const seen = new Set<string>();
+  const deduped: ParsedBloodworkMarker[] = [];
+
+  for (const marker of markers) {
+    const key = `${marker.panel}::${marker.marker}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(marker);
+  }
+
+  return deduped;
+}
+
+export function parseBloodworkPdfText(text: string): ParsedBloodworkMarker[] {
+  const rawText = normalizeText(text);
+  console.log("RAW PDF TEXT:", rawText);
+
+  const extractedTables = extractSectionTables(rawText);
+  console.log("RAW EXTRACTED TABLES:", extractedTables);
+
+  const markers: ParsedBloodworkMarker[] = [];
+
+  for (const table of extractedTables) {
+    for (const line of table.lines) {
+      const parsed = parseMarkerRow(line, table.category) ?? parseMarkerRowFallback(line, table.category);
+      if (parsed) markers.push(parsed);
+    }
+  }
+
+  if (markers.length === 0) {
+    for (const table of extractedTables) {
+      for (const line of table.lines) {
+        const fallback = parseMarkerRowFallback(line, table.category);
+        if (fallback) markers.push(fallback);
+      }
+    }
+  }
+
+  return dedupeMarkers(markers);
 }
 
 export async function parseBloodworkPdfBuffer(buffer: Buffer): Promise<ParsedBloodworkMarker[]> {

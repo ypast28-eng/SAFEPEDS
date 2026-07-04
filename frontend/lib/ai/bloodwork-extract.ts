@@ -150,7 +150,7 @@ export async function extractMarkersFromFile(
     return parsed.map((m) => ({
       name: m.marker,
       value: m.numeric_value ?? 0,
-      unit: m.unit,
+      unit: m.unit ?? "",
       reference_low: m.range_low,
       reference_high: m.range_high,
       panel: m.panel,

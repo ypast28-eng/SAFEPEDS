@@ -6,6 +6,7 @@ import {
   normalizeBloodworkKey,
   resolveApprovedMarkerName,
   stripUnitsFromMarkerText,
+  toDisplayMarkerName,
   type ApprovedBloodworkCategory,
 } from "@/lib/bloodwork/approved-markers";
 import type { BloodworkResultInput, BloodworkStatus } from "@/types/bloodwork";
@@ -15,7 +16,7 @@ export interface ValidatedExtractedMarker {
   category: string;
   marker_name: string;
   result_value: string;
-  units: string;
+  units: string | null;
   reference_range: string | null;
   status: BloodworkStatus | null;
   numeric_value: number;
@@ -41,6 +42,16 @@ function trimString(value: unknown): string | null {
 function parseResultValue(raw: unknown): { display: string; numeric: number } | null {
   const text = trimString(raw);
   if (!text) return null;
+
+  const comparatorWithFlag = text.match(/^([<>]=?)\s*(\d+\.?\d*)\s+([HL])$/i);
+  if (comparatorWithFlag) {
+    const numeric = Number(comparatorWithFlag[2]);
+    if (!Number.isFinite(numeric)) return null;
+    return {
+      display: `${comparatorWithFlag[1]}${comparatorWithFlag[2]} ${comparatorWithFlag[3].toUpperCase()}`,
+      numeric,
+    };
+  }
 
   const comparatorMatch = text.match(/^([<>]=?)\s*(\d+\.?\d*)$/);
   if (comparatorMatch) {
@@ -80,6 +91,7 @@ export function adaptRawExtractedMarker(raw: unknown): Partial<BloodworkResultIn
 
   const canonical = resolveApprovedMarkerName(markerName, category as ApprovedBloodworkCategory);
   if (!canonical) return null;
+  const displayName = toDisplayMarkerName(canonical);
 
   const resultText =
     trimString(row.result) ??
@@ -89,7 +101,7 @@ export function adaptRawExtractedMarker(raw: unknown): Partial<BloodworkResultIn
   const parsedResult = parseResultValue(resultText ?? row.numeric_value ?? row.result_value ?? row.value);
   if (!parsedResult) return null;
 
-  const units = trimString(row.unit) ?? trimString(row.units) ?? "";
+  const units = trimString(row.unit) ?? trimString(row.units);
   const referenceRange = normalizeReferenceRange(row.reference_range);
   const rangeLow =
     row.range_low != null ? Number(row.range_low) : row.reference_low != null ? Number(row.reference_low) : null;
@@ -97,13 +109,13 @@ export function adaptRawExtractedMarker(raw: unknown): Partial<BloodworkResultIn
     row.range_high != null ? Number(row.range_high) : row.reference_high != null ? Number(row.reference_high) : null;
 
   return {
-    marker_name: canonical,
-    marker: canonical,
+    marker_name: displayName,
+    marker: displayName,
     category,
     panel: category,
     result_value: parsedResult.numeric,
     numeric_value: parsedResult.numeric,
-    unit: units,
+    unit: units ?? "",
     reference_low: Number.isFinite(rangeLow) ? rangeLow : null,
     reference_high: Number.isFinite(rangeHigh) ? rangeHigh : null,
     range_low: Number.isFinite(rangeLow) ? rangeLow : null,
@@ -130,7 +142,7 @@ export function toValidatedExtractedMarker(
   const marker_name = adapted.marker_name;
   const numeric_value = adapted.result_value;
   const result_value = adapted.result?.trim() || adapted.result_text?.trim() || String(numeric_value);
-  const units = adapted.unit ?? "";
+  const units = adapted.unit?.trim() ? adapted.unit.trim() : null;
   const reference_low = adapted.reference_low ?? null;
   const reference_high = adapted.reference_high ?? null;
   const reference_range =
@@ -168,7 +180,7 @@ export function validatedToBloodworkResultInput(
     panel: validated.category,
     result_value: validated.numeric_value,
     numeric_value: validated.numeric_value,
-    unit: validated.units,
+    unit: validated.units ?? "",
     reference_low: source.reference_low ?? source.range_low ?? null,
     reference_high: source.reference_high ?? source.range_high ?? null,
     range_low: source.range_low ?? source.reference_low ?? null,

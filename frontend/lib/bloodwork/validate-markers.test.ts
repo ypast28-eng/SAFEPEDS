@@ -80,4 +80,34 @@ describe("prepareMarkersForInsert", () => {
     expect(valid[0]?.result_text).toBe("<85");
     expect(valid[0]?.reference_range).toBe("<160");
   });
+
+  it("accepts comparator results with low flags", () => {
+    const { valid } = prepareMarkersForInsert([
+      {
+        category: "Hormones",
+        marker_name: "FSH",
+        result: "<1 L",
+        unit: "U/L",
+        reference_range: "1 - 8",
+      },
+    ]);
+
+    expect(valid[0]?.result_text).toBe("<1 L");
+    expect(valid[0]?.numeric_value).toBe(1);
+  });
+
+  it("allows null units for ratio markers", () => {
+    const { valid } = prepareMarkersForInsert([
+      {
+        category: "Lipids",
+        marker_name: "Chol/HDL Ratio",
+        result: "2.9",
+        unit: "",
+        reference_range: "<5.0",
+      },
+    ]);
+
+    expect(valid[0]?.unit).toBe("");
+    expect(valid[0]?.result_text).toBe("2.9");
+  });
 });

@@ -1,4 +1,5 @@
 import type { BloodworkReportStatus } from "@/types/bloodwork";
+import { isApprovedBloodworkMarker } from "@/lib/bloodwork/approved-markers";
 import { BLOODWORK_UPLOAD_ACCEPT, BLOODWORK_UPLOAD_MAX_BYTES } from "@/types/bloodwork";
 
 const ALLOWED_TYPES = new Set(BLOODWORK_UPLOAD_ACCEPT.split(","));
@@ -64,7 +65,19 @@ export function reportHasUploadedFile(report: {
 }
 
 export function getBloodworkResultCount(report: { bloodwork_results?: unknown }): number {
-  return Array.isArray(report.bloodwork_results) ? report.bloodwork_results.length : 0;
+  if (!Array.isArray(report.bloodwork_results)) return 0;
+  return report.bloodwork_results.filter((result) => {
+    if (!result || typeof result !== "object") return false;
+    const row = result as {
+      category?: string;
+      panel?: string;
+      marker_name?: string;
+      marker?: string;
+    };
+    const category = row.category?.trim() || row.panel?.trim() || "";
+    const markerName = row.marker_name?.trim() || row.marker?.trim() || "";
+    return category && markerName && isApprovedBloodworkMarker(category, markerName);
+  }).length;
 }
 
 /** True when a file is attached and no results have been saved yet. */

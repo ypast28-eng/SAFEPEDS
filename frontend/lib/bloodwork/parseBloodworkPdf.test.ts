@@ -4,8 +4,13 @@ import {
   resolveApprovedMarkerName,
   resolveCategoryHeading,
   stripUnitsFromMarkerText,
+  toDisplayMarkerName,
 } from "@/lib/bloodwork/approved-markers";
-import { parseBloodworkPdfText, parseMarkerRow } from "@/lib/bloodwork/parseBloodworkPdf";
+import {
+  extractSectionTables,
+  parseBloodworkPdfText,
+  parseMarkerRow,
+} from "@/lib/bloodwork/parseBloodworkPdf";
 import { prepareMarkersForInsert } from "@/lib/bloodwork/validate-markers";
 import { runStrictExtractionPipeline } from "@/lib/bloodwork/extraction-pipeline";
 
@@ -21,12 +26,17 @@ Creatinine 90 umol/L 60 - 110
 eGFR >90 >59
 Sodium 140 mmol/L 135 - 145
 Potassium 4.2 mmol/L 3.5 - 5.2
+Chloride 102 mmol/L 95 - 110
+Bicarbonate 26 mmol/L 22 - 32
 Liver Function
 AST 34 U/L 10 - 40
 ALT 36 U/L 5 - 40
+Alk Phos 72 U/L 30 - 120
 Gamma GT 28 U/L 5 - 50
 Total Bilirubin 12 umol/L 3 - 20
+Total Protein 72 g/L 60 - 80
 Albumin 42 g/L 35 - 50
+Globulin 30 g/L 20 - 40
 Hormones
 FSH <1 L U/L 1 - 8
 LH <1 L U/L 1.0 - 8.0
@@ -36,12 +46,23 @@ Random
 Cholesterol 4.1 mmol/L <5.0
 Triglyceride 0.9 mmol/L <2.0
 HDL Cholesterol 1.4 mmol/L >1.0
+Chol/HDL Ratio 2.9 <5.0
 LDL Cholesterol 2.2 mmol/L <3.0
+Non HDL Cholesterol 2.7 mmol/L <4.0
 Haematology
 Haemoglobin 145 g/L 130 - 180
 Red cell count 4.8 x10^12/L 4.5 - 5.5
 Haematocrit 0.48 0.40 - 0.54
+MCV 88 fL 80 - 100
+MCH 30 pg 27 - 33
+MCHC 330 g/L 320 - 360
+RDW 13 % 11 - 15
 White cell count 6.2 x10^9/L 4.0 - 11.0
+Neutrophils 3.5 x10^9/L 2.0 - 7.5
+Lymphocytes 2.1 x10^9/L 1.0 - 4.0
+Monocytes 0.5 x10^9/L 0.2 - 1.0
+Eosinophils 0.1 x10^9/L 0.0 - 0.5
+Basophils <0.1 x10^9/L 0.0 - 0.2
 Platelets 252 x10^9/L 150 - 400
 Comments: sample slightly haemolysed`;
 
@@ -60,13 +81,21 @@ describe("approved markers", () => {
     expect(resolveApprovedMarkerName("GGT", "Liver Function")).toBe("Gamma GT");
     expect(resolveApprovedMarkerName("RBC", "Haematology")).toBe("Red cell count");
   });
+
+  it("normalizes display names", () => {
+    expect(toDisplayMarkerName("Cholesterol")).toBe("Total Cholesterol");
+    expect(toDisplayMarkerName("Red cell count")).toBe("Red Cell Count");
+    expect(toDisplayMarkerName("Testosterone")).toBe("Testosterone");
+    expect(isApprovedBloodworkMarker("Lipids", "Total Cholesterol")).toBe(true);
+  });
 });
 
 describe("parseBloodworkPdfText", () => {
-  it("extracts only approved markers inside pathology tables", () => {
+  it("extracts all approved markers from a full Clinipath-style report", () => {
     const markers = parseBloodworkPdfText(EXAMPLE_REPORT);
 
     expect(markers.every((m) => isApprovedBloodworkMarker(m.panel, m.marker))).toBe(true);
+    expect(markers).toHaveLength(41);
     expect(markers.find((m) => m.marker === "Testosterone")).toMatchObject({
       panel: "Androgens",
       marker: "Testosterone",
@@ -84,10 +113,33 @@ describe("parseBloodworkPdfText", () => {
     expect(fsh).toMatchObject({
       panel: "Hormones",
       marker: "FSH",
-      result: "<1",
+      result: "<1 L",
       unit: "U/L",
       reference_range: "1 - 8",
       status: "low",
+    });
+  });
+
+  it("parses eGFR and oestradiol comparator results", () => {
+    const markers = parseBloodworkPdfText(`General Chemistry
+eGFR >90 >59
+Hormones
+Oestradiol <85 pmol/L <160`);
+
+    expect(markers.find((m) => m.marker === "eGFR")).toMatchObject({ result: ">90" });
+    expect(markers.find((m) => m.marker === "Oestradiol")).toMatchObject({
+      result: "<85",
+      unit: "pmol/L",
+    });
+  });
+
+  it("parses Chol/HDL Ratio without units", () => {
+    const marker = parseMarkerRow("Chol/HDL Ratio 2.9 <5.0", "Lipids");
+    expect(marker).toMatchObject({
+      marker: "Chol/HDL Ratio",
+      result: "2.9",
+      unit: null,
+      reference_range: "<5.0",
     });
   });
 
@@ -97,7 +149,20 @@ Random
 Cholesterol 4.1 mmol/L <5.0
 HDL Cholesterol 1.4 mmol/L >1.0`);
 
-    expect(markers.map((m) => m.marker)).toEqual(["Cholesterol", "HDL Cholesterol"]);
+    expect(markers.map((m) => m.marker)).toEqual(["Total Cholesterol", "HDL Cholesterol"]);
+  });
+
+  it("extracts section tables for logging and fallback parsing", () => {
+    const tables = extractSectionTables(EXAMPLE_REPORT);
+    expect(tables.map((t) => t.category)).toEqual([
+      "Androgens",
+      "General Chemistry",
+      "Liver Function",
+      "Hormones",
+      "Lipids",
+      "Haematology",
+    ]);
+    expect(tables.find((t) => t.category === "Androgens")?.lines).toHaveLength(3);
   });
 
   it("deduplicates by category and marker", () => {
