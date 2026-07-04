@@ -3,9 +3,8 @@
  * for scanned or rasterized pages that expose little or no selectable text.
  */
 
-import path from "node:path";
-import { pathToFileURL } from "node:url";
 import { createCanvas } from "@napi-rs/canvas";
+import { getPdfJsServerModule } from "@/lib/bloodwork/pdfjs-server";
 
 export const OCR_CHAR_THRESHOLD = 100;
 
@@ -51,22 +50,6 @@ interface PdfRenderPage {
 }
 
 type OcrRecognizer = (imageBuffer: Buffer) => Promise<string>;
-
-let pdfJsModulePromise: Promise<typeof import("pdfjs-dist/legacy/build/pdf.mjs")> | null =
-  null;
-
-function getPdfJsModule() {
-  if (!pdfJsModulePromise) {
-    pdfJsModulePromise = (async () => {
-      const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-      pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(
-        path.join(process.cwd(), "node_modules/pdfjs-dist/build/pdf.worker.mjs")
-      ).href;
-      return pdfjs;
-    })();
-  }
-  return pdfJsModulePromise;
-}
 
 export function shouldRunOcrForPage(pdfJsCharCount: number): boolean {
   return pdfJsCharCount < OCR_CHAR_THRESHOLD;
@@ -163,7 +146,7 @@ export async function extractPdfTextByPage(
   buffer: Buffer,
   options?: { ocrRecognizer?: OcrRecognizer }
 ): Promise<PdfTextExtractionResult> {
-  const pdfjs = await getPdfJsModule();
+  const pdfjs = await getPdfJsServerModule();
   const pdf = await pdfjs.getDocument({
     data: new Uint8Array(buffer),
     useSystemFonts: true,
