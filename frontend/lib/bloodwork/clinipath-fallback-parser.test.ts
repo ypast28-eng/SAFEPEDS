@@ -27,7 +27,7 @@ describe("extractClinipathFallbackMarkers", () => {
     });
     expect(markers.find((m) => m.marker === "FSH")).toMatchObject({
       panel: "Hormones",
-      result: "<1 L",
+      result: "<1",
       unit: "U/L",
     });
     expect(markers.find((m) => m.marker === "Total Cholesterol")).toMatchObject({

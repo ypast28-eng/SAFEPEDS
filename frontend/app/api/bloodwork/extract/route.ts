@@ -6,6 +6,7 @@ import {
   OPENAI_SETUP_INSTRUCTIONS,
 } from "@/lib/ai/extraction-config";
 import { formatBloodworkInsertError } from "@/lib/bloodwork/db-errors";
+import { EXPECTED_CLINIPATH_MARKER_COUNT } from "@/lib/bloodwork/clinipath-parser";
 import { runStrictExtractionPipeline } from "@/lib/bloodwork/extraction-pipeline";
 import { buildExtractionSnapshot } from "@/lib/bloodwork/parsed-to-result";
 import { parseBloodworkPdfTextWithMeta } from "@/lib/bloodwork/parseBloodworkPdf";
@@ -155,6 +156,7 @@ export async function POST(request: Request) {
     let skippedMarkers: ReturnType<typeof prepareMarkersForInsert>["skipped"] = [];
     let validMarkers: ReturnType<typeof prepareMarkersForInsert>["valid"] = [];
     let rawText = "";
+    const warnings: string[] = [];
 
     if (pdf) {
       const pdfParse = (await import("pdf-parse")).default;
@@ -170,6 +172,25 @@ export async function POST(request: Request) {
       validatedMarkers = pipeline.validatedMarkers;
       skippedMarkers = pipeline.skippedMarkers;
       validMarkers = pipeline.validMarkers;
+
+      if (validMarkers.length < EXPECTED_CLINIPATH_MARKER_COUNT) {
+        console.warn("MISSING BLOODWORK MARKERS:", parsed.missingMarkers);
+        warnings.push(
+          `Only ${validMarkers.length} of ${EXPECTED_CLINIPATH_MARKER_COUNT} expected markers were extracted. Missing: ${parsed.missingMarkers.join(", ")}`
+        );
+        return NextResponse.json(
+          {
+            code: "incomplete_extraction",
+            error: `Incomplete extraction: found ${validMarkers.length} of ${EXPECTED_CLINIPATH_MARKER_COUNT} expected markers.`,
+            message: `Incomplete extraction: found ${validMarkers.length} of ${EXPECTED_CLINIPATH_MARKER_COUNT} expected markers. Missing: ${parsed.missingMarkers.join(", ")}`,
+            missingMarkers: parsed.missingMarkers,
+            extractedCount: validMarkers.length,
+            warnings,
+            parser,
+          },
+          { status: 422 }
+        );
+      }
     } else {
       const rawMarkers = await extractMarkersFromFile(buffer, mimeType, fileName);
       rawText = JSON.stringify(rawMarkers);
@@ -200,7 +221,6 @@ export async function POST(request: Request) {
 
     console.log("SKIPPED MARKERS:", skippedMarkers);
 
-    const warnings: string[] = [];
     if (skippedMarkers.length > 0) {
       warnings.push(
         `${skippedMarkers.length} marker(s) were skipped because they were invalid, unapproved, or duplicated.`

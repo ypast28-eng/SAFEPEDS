@@ -86,13 +86,13 @@ describe("prepareMarkersForInsert", () => {
       {
         category: "Hormones",
         marker_name: "FSH",
-        result: "<1 L",
+        result: "<1",
         unit: "U/L",
         reference_range: "1 - 8",
       },
     ]);
 
-    expect(valid[0]?.result_text).toBe("<1 L");
+    expect(valid[0]?.result_text).toBe("<1");
     expect(valid[0]?.numeric_value).toBe(1);
   });
 

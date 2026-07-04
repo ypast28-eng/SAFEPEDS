@@ -11,10 +11,11 @@ import {
 } from "@/lib/bloodwork/approved-markers";
 import {
   EXPECTED_CLINIPATH_MARKER_COUNT,
-  extractClinipathFallbackMarkers,
   getMissingClinipathMarkerNames,
-  mergeStructuredAndFallbackMarkers,
-} from "@/lib/bloodwork/clinipath-fallback-parser";
+  mergeClinipathMarkers,
+  parseClinipathPdfText,
+} from "@/lib/bloodwork/clinipath-parser";
+import { extractClinipathFallbackMarkers } from "@/lib/bloodwork/clinipath-fallback-parser";
 
 export interface ParsedBloodworkMarker {
   panel: string;
@@ -403,8 +404,10 @@ export function parseStructuredMarkers(text: string): ParsedBloodworkMarker[] {
 export interface BloodworkPdfParseResult {
   rawText: string;
   structuredMarkers: ParsedBloodworkMarker[];
+  clinipathMarkers: ParsedBloodworkMarker[];
   fallbackMarkers: ParsedBloodworkMarker[];
   finalMarkers: ParsedBloodworkMarker[];
+  missingMarkers: string[];
 }
 
 export function parseBloodworkPdfTextWithMeta(text: string): BloodworkPdfParseResult {
@@ -414,25 +417,31 @@ export function parseBloodworkPdfTextWithMeta(text: string): BloodworkPdfParseRe
   const structuredMarkers = parseStructuredMarkers(rawText);
   console.log("STRUCTURED EXTRACTED MARKERS:", structuredMarkers);
 
+  const clinipathMarkers = parseClinipathPdfText(rawText);
+  console.log("CLINIPATH EXTRACTED MARKERS:", clinipathMarkers);
+
   const fallbackMarkers = extractClinipathFallbackMarkers(rawText);
   console.log("FALLBACK EXTRACTED MARKERS:", fallbackMarkers);
 
-  const finalMarkers = mergeStructuredAndFallbackMarkers(structuredMarkers, fallbackMarkers);
+  const finalMarkers = mergeClinipathMarkers([
+    clinipathMarkers,
+    fallbackMarkers,
+    structuredMarkers,
+  ]);
   console.log("FINAL MARKERS TO INSERT:", finalMarkers);
 
+  const missingMarkers = getMissingClinipathMarkerNames(finalMarkers);
   if (finalMarkers.length < EXPECTED_CLINIPATH_MARKER_COUNT) {
-    const missing = getMissingClinipathMarkerNames(finalMarkers);
-    console.warn(
-      `[bloodwork/pdf] Expected ${EXPECTED_CLINIPATH_MARKER_COUNT} markers but found ${finalMarkers.length}. Missing:`,
-      missing
-    );
+    console.warn("MISSING BLOODWORK MARKERS:", missingMarkers);
   }
 
   return {
     rawText,
     structuredMarkers,
+    clinipathMarkers,
     fallbackMarkers,
     finalMarkers,
+    missingMarkers,
   };
 }
 
