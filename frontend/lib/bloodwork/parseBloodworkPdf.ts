@@ -16,6 +16,7 @@ import {
   parseClinipathPdfText,
 } from "@/lib/bloodwork/clinipath-parser";
 import { extractClinipathFallbackMarkers } from "@/lib/bloodwork/clinipath-fallback-parser";
+import { extractPdfTextByPage } from "@/lib/bloodwork/pdf-page-extract";
 
 export interface ParsedBloodworkMarker {
   panel: string;
@@ -450,7 +451,6 @@ export function parseBloodworkPdfText(text: string): ParsedBloodworkMarker[] {
 }
 
 export async function parseBloodworkPdfBuffer(buffer: Buffer): Promise<ParsedBloodworkMarker[]> {
-  const pdfParse = (await import("pdf-parse")).default;
-  const parsed = await pdfParse(buffer);
-  return parseBloodworkPdfText(parsed.text ?? "");
+  const extraction = await extractPdfTextByPage(buffer);
+  return parseBloodworkPdfText(extraction.combinedText);
 }
