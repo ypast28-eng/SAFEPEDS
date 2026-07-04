@@ -15,7 +15,7 @@ export function buildExtractionSnapshot(parsed: ParsedBloodworkMarker[]) {
     numeric_value: m.numeric_value,
     comparator: m.comparator,
     flag: m.flag,
-    unit: m.unit,
+    unit: m.unit ?? "",
     reference_range: m.reference_range,
     range_low: m.range_low,
     range_high: m.range_high,

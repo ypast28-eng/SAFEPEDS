@@ -156,6 +156,24 @@ export const MARKER_NAME_ALIASES: Record<string, string> = {
   plt: "Platelets",
 };
 
+/** Canonical whitelist name → UI / database display name. */
+export const MARKER_DISPLAY_NAMES: Partial<Record<string, string>> = {
+  Cholesterol: "Total Cholesterol",
+  "Red cell count": "Red Cell Count",
+  "White cell count": "White Cell Count",
+};
+
+export function toDisplayMarkerName(canonicalName: string): string {
+  return MARKER_DISPLAY_NAMES[canonicalName] ?? canonicalName;
+}
+
+export function toCanonicalMarkerName(
+  name: string,
+  category: ApprovedBloodworkCategory
+): string | null {
+  return resolveApprovedMarkerName(name, category);
+}
+
 const CATEGORY_LOOKUP = new Set(
   APPROVED_BLOODWORK_CATEGORIES.map((c) => normalizeBloodworkKey(c))
 );
@@ -244,7 +262,33 @@ export function isApprovedBloodworkMarker(
   markerName: string
 ): boolean {
   if (!isApprovedCategoryName(category)) return false;
-  return resolveApprovedMarkerName(markerName, category) != null;
+  if (resolveApprovedMarkerName(markerName, category) != null) return true;
+
+  const approved = APPROVED_MARKERS_BY_CATEGORY[category as ApprovedBloodworkCategory];
+  const displayKey = normalizeBloodworkKey(markerName);
+  return approved.some(
+    (marker) => normalizeBloodworkKey(toDisplayMarkerName(marker)) === displayKey
+  );
+}
+
+/** Search patterns for fallback raw-text extraction (longest names first). */
+export function getMarkerSearchPatterns(
+  category: ApprovedBloodworkCategory
+): Array<{ canonical: string; pattern: RegExp }> {
+  return [...APPROVED_MARKERS_BY_CATEGORY[category]]
+    .sort((a, b) => b.length - a.length)
+    .map((canonical) => {
+      const aliases = Object.entries(MARKER_NAME_ALIASES)
+        .filter(([, target]) => target === canonical)
+        .map(([alias]) => alias);
+      const names = [canonical, ...aliases]
+        .sort((a, b) => b.length - a.length)
+        .map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+      return {
+        canonical,
+        pattern: new RegExp(`\\b(?:${names.join("|")})\\b`, "i"),
+      };
+    });
 }
 
 /** Strip trailing lab units accidentally captured in marker names. */

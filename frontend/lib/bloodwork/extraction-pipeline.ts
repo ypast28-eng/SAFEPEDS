@@ -11,9 +11,9 @@ export function parsedMarkersToInputs(parsed: ParsedBloodworkMarker[]): Bloodwor
     panel: m.panel,
     marker_name: m.marker,
     marker: m.marker,
-    result_value: m.numeric_value ?? 0,
-    numeric_value: m.numeric_value ?? 0,
-    unit: m.unit,
+    result_value: m.result,
+    numeric_value: m.numeric_value,
+    unit: m.unit ?? "",
     units: m.unit,
     reference_range: m.reference_range,
     range_low: m.range_low,
@@ -24,6 +24,8 @@ export function parsedMarkersToInputs(parsed: ParsedBloodworkMarker[]): Bloodwor
     result_text: m.result,
     comparator: m.comparator,
     flag: m.flag,
+    status:
+      m.status === "low" ? "Low" : m.status === "high" ? "High" : m.status === "normal" ? "Normal" : undefined,
   }));
 
   return prepareMarkersForInsert(mapped).valid;
@@ -37,7 +39,7 @@ export function runStrictExtractionPipeline(parsed: ParsedBloodworkMarker[]) {
     marker: m.marker,
     result_value: m.result,
     numeric_value: m.numeric_value,
-    unit: m.unit,
+    unit: m.unit ?? "",
     units: m.unit,
     reference_range: m.reference_range,
     range_low: m.range_low,
@@ -48,6 +50,8 @@ export function runStrictExtractionPipeline(parsed: ParsedBloodworkMarker[]) {
     result_text: m.result,
     comparator: m.comparator,
     flag: m.flag,
+    status:
+      m.status === "low" ? "Low" : m.status === "high" ? "High" : m.status === "normal" ? "Normal" : undefined,
   }));
 
   const { valid, validated, skipped } = prepareMarkersForInsert(mappedMarkers);
