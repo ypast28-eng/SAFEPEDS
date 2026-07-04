@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { fetchChatHistory } from "@/lib/ai/load-user-chat-context";
+import { clearChatHistory } from "@/lib/ai/load-user-chat-context";
 
 export const runtime = "nodejs";
 
-export async function GET(request: Request) {
+/** Chat history is session-only; always return an empty list. */
+export async function GET() {
+  return NextResponse.json([]);
+}
+
+export async function DELETE() {
   try {
     const supabase = await createClient();
     const {
@@ -16,13 +21,10 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { searchParams } = new URL(request.url);
-    const limit = Math.min(Number(searchParams.get("limit") ?? 30), 50);
-
-    const history = await fetchChatHistory(supabase, user.id, limit);
-    return NextResponse.json(history);
+    await clearChatHistory(supabase, user.id);
+    return NextResponse.json({ success: true, cleared: true });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to load chat history";
+    const message = err instanceof Error ? err.message : "Failed to clear chat history";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

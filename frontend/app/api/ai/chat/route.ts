@@ -5,7 +5,6 @@ import { validateChatMessage } from "@/lib/ai/chat-security";
 import { loadEducationContent } from "@/lib/ai/load-education-content";
 import {
   buildChatContext,
-  saveChatMessage,
 } from "@/lib/ai/load-user-chat-context";
 import {
   AI_DISCLAIMER,
@@ -79,15 +78,6 @@ export async function POST(request: Request) {
         { status: outcome.status }
       );
     }
-
-    await saveChatMessage(supabase, user.id, "user", sanitized, []);
-    await saveChatMessage(
-      supabase,
-      user.id,
-      "assistant",
-      outcome.result.reply,
-      outcome.result.sources
-    );
 
     return NextResponse.json(outcome.result);
   } catch (err) {

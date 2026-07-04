@@ -143,12 +143,19 @@ export async function saveChatMessage(
   content: string,
   sources: unknown[] = []
 ): Promise<void> {
-  await supabase.from("ai_chat_messages").insert({
-    user_id: userId,
-    role,
-    content,
-    sources,
-  });
+  // Chat messages are session-only; not persisted to Supabase.
+  void supabase;
+  void userId;
+  void role;
+  void content;
+  void sources;
+}
+
+export async function clearChatHistory(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<void> {
+  await supabase.from("ai_chat_messages").delete().eq("user_id", userId);
 }
 
 export async function fetchChatHistory(
