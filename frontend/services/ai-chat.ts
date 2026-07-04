@@ -7,17 +7,24 @@ export type SendChatOutcome =
   | { data: null; error: null; setupRequired: true; setupMessage: string; billingError: false }
   | { data: null; error: null; setupRequired: false; billingError: true; billingMessage: string };
 
-export async function fetchChatHistoryViaApi(limit = 30): Promise<ChatHistoryMessage[]> {
+export async function clearChatHistoryViaApi(): Promise<{ error: string | null }> {
   try {
-    const res = await fetch(`/api/ai/chat/history?limit=${limit}`, {
-      method: "GET",
+    const res = await fetch("/api/ai/chat/history", {
+      method: "DELETE",
       cache: "no-store",
     });
-    if (!res.ok) return [];
-    return (await res.json()) as ChatHistoryMessage[];
+    if (!res.ok) {
+      const json = (await res.json()) as { error?: string };
+      return { error: json.error ?? "Failed to clear chat" };
+    }
+    return { error: null };
   } catch {
-    return [];
+    return { error: "Could not reach the AI chat service. Check your connection and try again." };
   }
+}
+
+export async function fetchChatHistoryViaApi(_limit = 30): Promise<ChatHistoryMessage[]> {
+  return [];
 }
 
 export async function sendChatMessageViaApi(body: {

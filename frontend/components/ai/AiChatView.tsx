@@ -1,14 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Brain, Loader2, Send, AlertCircle } from "lucide-react";
+import { Brain, Eraser, Loader2, Send, AlertCircle } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button, Card, Badge } from "@/components/ui";
 import { Textarea } from "@/components/ui/Textarea";
 import { AiDisclaimer } from "./AiDisclaimer";
 import { AiSourceList } from "./AiSourceList";
+import { clearClientChatStorage } from "@/lib/ai/chat-storage";
 import { fetchAiReportConfig } from "@/services/ai-cycle-report";
-import { fetchChatHistoryViaApi, sendChatMessageViaApi } from "@/services/ai-chat";
+import { clearChatHistoryViaApi, sendChatMessageViaApi } from "@/services/ai-chat";
 import { AI_SUGGESTED_QUESTIONS } from "@/types/ai";
 import type { ChatHistoryMessage } from "@/types/ai";
 import { cn } from "@/utils/cn";
@@ -23,7 +24,8 @@ export function AiChatView() {
   const [messages, setMessages] = useState<ChatBubble[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isHistoryLoading, setIsHistoryLoading] = useState(true);
+  const [isClearing, setIsClearing] = useState(false);
+  const [clearNotice, setClearNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [setupMessage, setSetupMessage] = useState<string | null>(null);
   const [billingMessage, setBillingMessage] = useState<string | null>(null);
@@ -38,23 +40,33 @@ export function AiChatView() {
   }, []);
 
   useEffect(() => {
-    setIsHistoryLoading(true);
-    fetchChatHistoryViaApi(30)
-      .then((history) => {
-        setMessages(
-          history.map((m) => ({
-            role: m.role,
-            content: m.content,
-            sources: m.sources,
-          }))
-        );
-      })
-      .finally(() => setIsHistoryLoading(false));
-  }, []);
-
-  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
+
+  useEffect(() => {
+    if (!clearNotice) return;
+    const timer = window.setTimeout(() => setClearNotice(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [clearNotice]);
+
+  const clearChat = useCallback(async () => {
+    setIsClearing(true);
+    setError(null);
+    setBillingMessage(null);
+    setMessages([]);
+    setInput("");
+    clearClientChatStorage();
+
+    const { error: clearError } = await clearChatHistoryViaApi();
+    setIsClearing(false);
+
+    if (clearError) {
+      setError(clearError);
+      return;
+    }
+
+    setClearNotice("Chat cleared");
+  }, []);
 
   const send = useCallback(
     async (text: string) => {
@@ -113,7 +125,29 @@ export function AiChatView() {
         description="Ask educational questions about your bloodwork, cycles, and risk scores."
         badge="Educational Only"
         badgeVariant="warning"
+        actions={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void clearChat()}
+            disabled={isClearing || isLoading}
+            isLoading={isClearing}
+          >
+            <Eraser className="h-4 w-4" />
+            Erase chat
+          </Button>
+        }
       />
+
+      {clearNotice && (
+        <div
+          role="status"
+          className="mb-4 rounded-lg border border-primary/30 bg-primary/10 px-4 py-2 text-sm text-foreground"
+        >
+          {clearNotice}
+        </div>
+      )}
 
       {aiConfigured === false && setupMessage && (
         <Card variant="bordered" padding="md" className="mb-4 border-secondary/30 bg-secondary/5">
@@ -136,14 +170,7 @@ export function AiChatView() {
 
       <Card variant="elevated" padding="none" className="flex-1 flex flex-col min-h-0 mb-4">
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {isHistoryLoading && (
-            <div className="flex items-center justify-center gap-2 py-12 text-muted text-sm">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading chat history…
-            </div>
-          )}
-
-          {!isHistoryLoading && messages.length === 0 && (
+          {messages.length === 0 && (
             <div className="text-center py-12">
               <Brain className="h-10 w-10 text-muted mx-auto mb-3" />
               <p className="text-sm text-muted mb-4">
