@@ -33,6 +33,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { profileToAiContext, reportToAiContext } from "@/lib/ai/transform";
 import { formatLabDate } from "@/utils/bloodwork";
 import { formatBloodworkPhase, phaseBadgeVariant } from "@/lib/bloodwork/phase";
+import { notifyBloodworkReportsChanged } from "@/lib/bloodwork/report-events";
 import { formatReportStatus, canExtractBloodworkMarkers, getBloodworkResultCount, getReportStoragePath, reportHasUploadedFile } from "@/lib/bloodwork/upload";
 import type { BloodworkReportWithResults, ExtractedBloodworkMarker, StructuredBloodworkMarker } from "@/types/bloodwork";
 
@@ -130,6 +131,7 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
         setExtractNotice(
           `Extracted and saved ${outcome.data.extractedCount} marker(s) from your report.`
         );
+        notifyBloodworkReportsChanged();
         await loadReport();
         return;
       }

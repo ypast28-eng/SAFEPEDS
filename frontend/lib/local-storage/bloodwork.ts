@@ -2,6 +2,7 @@ import { calculateStatus } from "@/lib/bloodwork/status";
 import { normalizeBloodworkResult } from "@/lib/bloodwork/normalize-result";
 import { bloodworkResultToDbFields } from "@/lib/bloodwork/result-row";
 import { resolveBloodworkPhase } from "@/lib/bloodwork/phase";
+import { sortBloodworkReportsByRecency } from "@/lib/bloodwork/report-sort";
 import { readJson, writeJson } from "@/lib/local-storage/store";
 import {
   LS_BLOODWORK_HISTORY_KEY,
@@ -27,12 +28,7 @@ function loadReports(): BloodworkReportWithResults[] {
 }
 
 function saveReports(reports: BloodworkReportWithResults[]) {
-  writeJson(
-    LS_BLOODWORK_KEY,
-    [...reports].sort(
-      (a, b) => new Date(b.collection_date).getTime() - new Date(a.collection_date).getTime()
-    )
-  );
+  writeJson(LS_BLOODWORK_KEY, sortBloodworkReportsByRecency(reports));
 }
 
 function loadHistory(): BloodworkHistoryPoint[] {
@@ -69,7 +65,7 @@ function appendHistory(report: BloodworkReportWithResults) {
 }
 
 export function localFetchReportsWithStats(): BloodworkDashboardStats {
-  const enriched = loadReports().map(enrich);
+  const enriched = sortBloodworkReportsByRecency(loadReports().map(enrich));
   const latestReport = enriched[0] ?? null;
   const latestCruiseReport = enriched.find((r) => r.phase === "cruise") ?? null;
   const latestBlastReport = enriched.find((r) => r.phase === "blast") ?? null;

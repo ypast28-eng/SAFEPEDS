@@ -36,6 +36,7 @@ import type {
   StructuredBloodworkMarker,
 } from "@/types/bloodwork";
 import { resolveBloodworkPhase } from "@/lib/bloodwork/phase";
+import { notifyBloodworkReportsChanged } from "@/lib/bloodwork/report-events";
 import { cn } from "@/utils/cn";
 
 type UploadStep = "form" | "uploaded" | "preview" | "manual";
@@ -132,6 +133,7 @@ export function UploadReportForm({
       setExtractionWarnings(outcome.data.warnings);
       setUploadedReport((prev) => (prev ? { ...prev, status: "complete" } : prev));
       setStep("preview");
+      notifyBloodworkReportsChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Extraction failed. Try again or enter markers manually.");
     } finally {

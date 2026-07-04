@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { createReportWithResults, appendResultsToReport } from "@/services/bloodwork";
 import type { BloodworkPhaseInput, BloodworkResultInput, ExtractedBloodworkMarker } from "@/types/bloodwork";
 import { resolveBloodworkPhase } from "@/lib/bloodwork/phase";
+import { notifyBloodworkReportsChanged } from "@/lib/bloodwork/report-events";
 
 interface ResultRow {
   localId: string;
@@ -157,6 +158,7 @@ export function ManualEntryForm({
         setError(appendError);
         return;
       }
+      notifyBloodworkReportsChanged();
       if (onSaved) {
         onSaved();
         return;
@@ -181,6 +183,7 @@ export function ManualEntryForm({
       return;
     }
 
+    notifyBloodworkReportsChanged();
     router.push(data ? `/bloodwork/reports/${data.id}` : "/bloodwork");
     router.refresh();
   }
