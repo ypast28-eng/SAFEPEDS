@@ -79,10 +79,10 @@ export function BloodworkResultsGroupedTable({
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">{row.result_value}</td>
                   <td className="px-3 py-2 text-muted whitespace-nowrap">
-                    {row.units || "—"}
+                    {row.units ? row.units : "—"}
                   </td>
                   <td className="px-3 py-2 text-muted whitespace-nowrap">
-                    {row.reference_range || "—"}
+                    {row.reference_range ? row.reference_range : "—"}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     <StatusBadge status={row.status} />
@@ -127,19 +127,13 @@ export function bloodworkResultToDisplayRow(result: {
 
   if (!result_value) return null;
 
-  const reference_range =
-    result.reference_range?.trim() ||
-    [result.reference_low ?? result.range_low, result.reference_high ?? result.range_high]
-      .filter((v) => v != null)
-      .join(" - ");
-
   return {
     id: result.id,
     category,
     marker_name,
     result_value,
-    units: result.unit?.trim() || "",
-    reference_range,
+    units: result.unit?.trim() ?? "",
+    reference_range: result.reference_range?.trim() ?? "",
     status: result.status ?? null,
   };
 }

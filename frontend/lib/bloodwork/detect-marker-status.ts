@@ -19,7 +19,20 @@ export function detectMarkerStatus(input: StatusInput): ParsedMarkerStatus {
   const value = input.numeric_value;
   if (value == null || !Number.isFinite(value)) return "unknown";
 
+  const comparator = input.comparator?.trim();
   const { range_low, range_high } = input;
+
+  if (comparator === "<" || comparator === "<=") {
+    if (range_low != null && value <= range_low) return "low";
+    if (range_high != null && value > range_high) return "high";
+    return "normal";
+  }
+
+  if (comparator === ">" || comparator === ">=") {
+    if (range_high != null && value >= range_high) return "high";
+    if (range_low != null && value < range_low) return "low";
+    return "normal";
+  }
 
   if (range_low != null && range_high != null) {
     if (value < range_low) return "low";
