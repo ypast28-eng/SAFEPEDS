@@ -71,6 +71,9 @@ export interface MarkerExtractionDiagnostic {
 export interface PageMarkerSummary {
   pageNumber: number;
   charCount: number;
+  pdfJsCharCount: number;
+  ocrCharCount: number;
+  ocrUsed: boolean;
   isEmpty: boolean;
   markersFound: string[];
 }
@@ -129,10 +132,13 @@ function diagnoseMarker(
 
   if (!pageHit.regexMatched) {
     const emptyPages = pages.filter((p) => p.isEmpty).map((p) => p.pageNumber);
+    const ocrPages = pages.filter((p) => p.ocrUsed).map((p) => p.pageNumber);
     const reason =
       emptyPages.length > 0
-        ? `Marker name not found in pdf.js text layer on any page. ${emptyPages.length} page(s) returned empty text (${emptyPages.join(", ")}), which usually means those pages are image/scanned with no selectable text — OCR was not run.`
-        : "Marker name not found in pdf.js text layer on any page. Text extraction may have failed or the marker label differs from the whitelist.";
+        ? ocrPages.length > 0
+          ? `Marker name not found after hybrid extraction. ${emptyPages.length} page(s) still empty (${emptyPages.join(", ")}). OCR ran on page(s) ${ocrPages.join(", ")} but did not recover this marker label.`
+          : `Marker name not found in extracted text on any page. ${emptyPages.length} page(s) returned empty text (${emptyPages.join(", ")}).`
+        : "Marker name not found in extracted text on any page. Text extraction may have failed or the marker label differs from the whitelist.";
 
     return {
       marker: display,
@@ -190,6 +196,9 @@ export async function runPdfExtractionTrace(buffer: Buffer): Promise<ExtractionT
     return {
       pageNumber: page.pageNumber,
       charCount: page.charCount,
+      pdfJsCharCount: page.pdfJsCharCount,
+      ocrCharCount: page.ocrCharCount,
+      ocrUsed: page.ocrUsed,
       isEmpty: page.isEmpty,
       markersFound: summarizeMarkers(pageMarkers),
     };
@@ -207,9 +216,9 @@ export async function runPdfExtractionTrace(buffer: Buffer): Promise<ExtractionT
 
   return {
     pdfExtraction,
-    textExtractionMethod: "pdf.js-text-layer",
+    textExtractionMethod: pdfExtraction.ocrUsed ? "ocr" : "pdf.js-text-layer",
     aiExtractionUsed: false,
-    ocrUsed: false,
+    ocrUsed: pdfExtraction.ocrUsed,
     parseResult,
     pageSummaries,
     missingMarkerDiagnostics,
@@ -238,7 +247,7 @@ export function logExtractionTrace(trace: ExtractionTraceResult): void {
   console.log("Per-page marker counts:");
   for (const summary of trace.pageSummaries) {
     console.log(
-      `  Page ${summary.pageNumber}: chars=${summary.charCount} empty=${summary.isEmpty} markers=${summary.markersFound.length}`
+      `  Page ${summary.pageNumber}: pdf.js=${summary.pdfJsCharCount} ocr=${summary.ocrUsed ? summary.ocrCharCount : 0} final=${summary.charCount} empty=${summary.isEmpty} markers=${summary.markersFound.length}`
     );
     if (summary.markersFound.length > 0) {
       console.log(`    ${summary.markersFound.join("; ")}`);
@@ -274,8 +283,19 @@ export function traceParseFromText(text: string): ExtractionTraceResult {
     pdfExtraction: {
       method: "pdf.js-text-layer",
       pageCount: 1,
-      pages: [{ pageNumber: 1, text, charCount: text.length, isEmpty: text.trim().length < 10 }],
+      pages: [
+        {
+          pageNumber: 1,
+          text,
+          charCount: text.length,
+          isEmpty: text.trim().length < 10,
+          pdfJsCharCount: text.length,
+          ocrCharCount: 0,
+          ocrUsed: false,
+        },
+      ],
       combinedText: text,
+      ocrUsed: false,
     },
     textExtractionMethod: "pdf.js-text-layer",
     aiExtractionUsed: false,
@@ -285,6 +305,9 @@ export function traceParseFromText(text: string): ExtractionTraceResult {
       {
         pageNumber: 1,
         charCount: text.length,
+        pdfJsCharCount: text.length,
+        ocrCharCount: 0,
+        ocrUsed: false,
         isEmpty: text.trim().length < 10,
         markersFound: summarizeMarkers(parseResult.finalMarkers),
       },
@@ -292,7 +315,17 @@ export function traceParseFromText(text: string): ExtractionTraceResult {
     missingMarkerDiagnostics: TRACE_MARKER_TARGETS.map((target) =>
       diagnoseMarker(
         target,
-        [{ pageNumber: 1, text, charCount: text.length, isEmpty: text.trim().length < 10 }],
+        [
+          {
+            pageNumber: 1,
+            text,
+            charCount: text.length,
+            isEmpty: text.trim().length < 10,
+            pdfJsCharCount: text.length,
+            ocrCharCount: 0,
+            ocrUsed: false,
+          },
+        ],
         text,
         parseResult.finalMarkers,
         splitClinipathCategoryBlocks(text)

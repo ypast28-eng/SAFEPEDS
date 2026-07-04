@@ -1,14 +1,24 @@
 /**
- * Extract text from each PDF page separately using pdf-parse (pdf.js text layer).
+ * Hybrid PDF text extraction: pdf.js text layer per page, with OCR fallback
+ * for scanned or rasterized pages that expose little or no selectable text.
  */
 
-export type PdfTextExtractionMethod = "pdf.js-text-layer";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+import { createCanvas } from "@napi-rs/canvas";
+
+export const OCR_CHAR_THRESHOLD = 100;
+
+export type PdfTextExtractionMethod = "pdf.js-text-layer" | "hybrid-pdf.js-ocr";
 
 export interface PdfPageText {
   pageNumber: number;
   text: string;
   charCount: number;
   isEmpty: boolean;
+  pdfJsCharCount: number;
+  ocrCharCount: number;
+  ocrUsed: boolean;
 }
 
 export interface PdfTextExtractionResult {
@@ -16,19 +26,64 @@ export interface PdfTextExtractionResult {
   pageCount: number;
   pages: PdfPageText[];
   combinedText: string;
+  ocrUsed: boolean;
 }
 
-interface PdfPageData {
+interface PdfTextItem {
+  str?: string;
+  transform: number[];
+}
+
+interface PdfTextContent {
+  items: PdfTextItem[];
+}
+
+interface PdfRenderPage {
   getTextContent: (options: {
     normalizeWhitespace: boolean;
     disableCombineTextItems: boolean;
-  }) => Promise<{
-    items: Array<{ str: string; transform: number[] }>;
-  }>;
+  }) => Promise<PdfTextContent>;
+  getViewport: (options: { scale: number }) => { width: number; height: number };
+  render: (params: {
+    canvasContext: ReturnType<ReturnType<typeof createCanvas>["getContext"]>;
+    viewport: ReturnType<PdfRenderPage["getViewport"]>;
+  }) => { promise: Promise<void> };
 }
 
-async function renderPageText(pageData: PdfPageData): Promise<string> {
-  const textContent = await pageData.getTextContent({
+type OcrRecognizer = (imageBuffer: Buffer) => Promise<string>;
+
+let pdfJsModulePromise: Promise<typeof import("pdfjs-dist/legacy/build/pdf.mjs")> | null =
+  null;
+
+function getPdfJsModule() {
+  if (!pdfJsModulePromise) {
+    pdfJsModulePromise = (async () => {
+      const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+      pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(
+        path.join(process.cwd(), "node_modules/pdfjs-dist/build/pdf.worker.mjs")
+      ).href;
+      return pdfjs;
+    })();
+  }
+  return pdfJsModulePromise;
+}
+
+export function shouldRunOcrForPage(pdfJsCharCount: number): boolean {
+  return pdfJsCharCount < OCR_CHAR_THRESHOLD;
+}
+
+export function mergePageTexts(pdfJsText: string, ocrText: string): string {
+  const trimmedPdfJs = pdfJsText.trim();
+  const trimmedOcr = ocrText.trim();
+
+  if (!trimmedPdfJs) return ocrText;
+  if (!trimmedOcr) return pdfJsText;
+
+  return `${pdfJsText}\n${ocrText}`;
+}
+
+async function extractTextLayerFromPage(page: PdfRenderPage): Promise<string> {
+  const textContent = await page.getTextContent({
     normalizeWhitespace: false,
     disableCombineTextItems: false,
   });
@@ -50,45 +105,124 @@ async function renderPageText(pageData: PdfPageData): Promise<string> {
   return text;
 }
 
-export async function extractPdfTextByPage(buffer: Buffer): Promise<PdfTextExtractionResult> {
-  const pages: PdfPageText[] = [];
-  let pageNumber = 0;
+async function renderPageToImageBuffer(page: PdfRenderPage, scale = 2): Promise<Buffer> {
+  const viewport = page.getViewport({ scale });
+  const canvas = createCanvas(viewport.width, viewport.height);
+  const context = canvas.getContext("2d");
 
-  const pdfParse = (await import("pdf-parse")).default;
+  await page.render({ canvasContext: context, viewport }).promise;
 
-  const result = await pdfParse(buffer, {
-    pagerender: async (pageData: PdfPageData) => {
-      pageNumber += 1;
-      const text = await renderPageText(pageData);
-      pages.push({
-        pageNumber,
-        text,
-        charCount: text.length,
-        isEmpty: text.trim().length < 10,
-      });
-      return text;
+  return canvas.toBuffer("image/png");
+}
+
+async function createOcrRecognizer(): Promise<{
+  recognize: OcrRecognizer;
+  terminate: () => Promise<unknown>;
+}> {
+  const { createWorker } = await import("tesseract.js");
+  const worker = await createWorker("eng");
+
+  return {
+    recognize: async (imageBuffer: Buffer) => {
+      const { data } = await worker.recognize(imageBuffer);
+      return data.text ?? "";
     },
-  });
+    terminate: () => worker.terminate(),
+  };
+}
+
+function buildPageText(
+  pageNumber: number,
+  pdfJsText: string,
+  ocrText: string,
+  ocrUsed: boolean
+): PdfPageText {
+  const mergedText = mergePageTexts(pdfJsText, ocrText);
+  const pdfJsCharCount = pdfJsText.length;
+  const ocrCharCount = ocrText.length;
+
+  return {
+    pageNumber,
+    text: mergedText,
+    charCount: mergedText.length,
+    isEmpty: mergedText.trim().length < 10,
+    pdfJsCharCount,
+    ocrCharCount,
+    ocrUsed,
+  };
+}
+
+export function logHybridPageStats(page: PdfPageText): void {
+  console.log(`Page ${page.pageNumber}:`);
+  console.log(`pdf.js chars: ${page.pdfJsCharCount}`);
+  console.log(`OCR chars: ${page.ocrUsed ? page.ocrCharCount : 0}`);
+  console.log(`Final chars: ${page.charCount}`);
+}
+
+export async function extractPdfTextByPage(
+  buffer: Buffer,
+  options?: { ocrRecognizer?: OcrRecognizer }
+): Promise<PdfTextExtractionResult> {
+  const pdfjs = await getPdfJsModule();
+  const pdf = await pdfjs.getDocument({
+    data: new Uint8Array(buffer),
+    useSystemFonts: true,
+    disableFontFace: true,
+    isEvalSupported: false,
+  }).promise;
+
+  const pages: PdfPageText[] = [];
+  let documentOcrUsed = false;
+
+  const ocr =
+    options?.ocrRecognizer != null
+      ? {
+          recognize: options.ocrRecognizer,
+          terminate: async () => {},
+        }
+      : await createOcrRecognizer();
+
+  try {
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = (await pdf.getPage(pageNumber)) as unknown as PdfRenderPage;
+      const pdfJsText = await extractTextLayerFromPage(page);
+      const needsOcr = shouldRunOcrForPage(pdfJsText.length);
+
+      let ocrText = "";
+      if (needsOcr) {
+        documentOcrUsed = true;
+        const imageBuffer = await renderPageToImageBuffer(page);
+        ocrText = await ocr.recognize(imageBuffer);
+      }
+
+      const pageText = buildPageText(pageNumber, pdfJsText, ocrText, needsOcr);
+      pages.push(pageText);
+      logHybridPageStats(pageText);
+    }
+  } finally {
+    await ocr.terminate();
+  }
 
   const combinedText = pages.map((page) => page.text).join("\n");
 
   return {
-    method: "pdf.js-text-layer",
-    pageCount: result.numpages ?? pages.length,
+    method: documentOcrUsed ? "hybrid-pdf.js-ocr" : "pdf.js-text-layer",
+    pageCount: pdf.numPages,
     pages,
-    combinedText: combinedText || result.text || "",
+    combinedText,
+    ocrUsed: documentOcrUsed,
   };
 }
 
 export function logPdfPageText(extraction: PdfTextExtractionResult): void {
   console.log(`PDF pages detected: ${extraction.pageCount}`);
   console.log(`PDF text extraction method: ${extraction.method}`);
+  console.log(`OCR used: ${extraction.ocrUsed ? "Yes" : "No"}`);
 
   for (const page of extraction.pages) {
     console.log(`===== PAGE ${page.pageNumber} =====`);
-    console.log(page.text || "(empty — no pdf.js text layer on this page)");
-    console.log(
-      `[page ${page.pageNumber}] chars=${page.charCount} empty=${page.isEmpty}`
-    );
+    console.log(page.text || "(empty — no extractable text on this page)");
+    logHybridPageStats(page);
+    console.log(`[page ${page.pageNumber}] empty=${page.isEmpty}`);
   }
 }
