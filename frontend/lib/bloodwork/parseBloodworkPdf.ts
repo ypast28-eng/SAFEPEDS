@@ -265,11 +265,5 @@ export function parseBloodworkPdfText(text: string): ParsedBloodworkMarker[] {
 export async function parseBloodworkPdfBuffer(buffer: Buffer): Promise<ParsedBloodworkMarker[]> {
   const pdfParse = (await import("pdf-parse")).default;
   const parsed = await pdfParse(buffer);
-  const markers = parseBloodworkPdfText(parsed.text ?? "");
-  if (markers.length === 0) {
-    throw new Error(
-      "Could not detect blood markers in this PDF. Try a clearer scan or enter results manually."
-    );
-  }
-  return markers;
+  return parseBloodworkPdfText(parsed.text ?? "");
 }

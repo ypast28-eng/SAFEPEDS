@@ -1,7 +1,9 @@
 import { calculateStatus } from "@/lib/bloodwork/status";
 import { resolveBloodworkPhase } from "@/lib/bloodwork/phase";
+import { formatBloodworkInsertError } from "@/lib/bloodwork/db-errors";
 import { normalizeBloodworkResults } from "@/lib/bloodwork/normalize-result";
 import { bloodworkResultToDbFields, toBloodworkResultRow } from "@/lib/bloodwork/result-row";
+import { prepareMarkersForInsert } from "@/lib/bloodwork/validate-markers";
 import { isSupabaseEnvConfigured } from "@/lib/supabase/env";
 import { tryCreateClient } from "@/lib/supabase/client";
 import { MOCK_BLOOD_MARKERS } from "@/lib/mock/compounds";
@@ -225,12 +227,24 @@ export async function createReportWithResults(
   if (reportError) return { data: null, error: reportError.message };
 
   if (input.results.length > 0) {
-    const rows = input.results.map((r) => toBloodworkResultRow(report.id, userId, r));
+    const { valid, skipped } = prepareMarkersForInsert(input.results);
+    if (valid.length === 0) {
+      await supabase.from("bloodwork_reports").delete().eq("id", report.id);
+      return {
+        data: null,
+        error:
+          skipped.length > 0
+            ? "No valid marker results to save. Check marker names and numeric values."
+            : "Add at least one valid marker result.",
+      };
+    }
+
+    const rows = valid.map((r) => toBloodworkResultRow(report.id, userId, r));
 
     const { error: resultsError } = await supabase.from("bloodwork_results").insert(rows);
     if (resultsError) {
       await supabase.from("bloodwork_reports").delete().eq("id", report.id);
-      return { data: null, error: resultsError.message };
+      return { data: null, error: formatBloodworkInsertError(resultsError.message) };
     }
   }
 
@@ -345,6 +359,16 @@ export async function appendResultsToReport(
     return { error: null };
   }
 
+  const { valid, skipped } = prepareMarkersForInsert(results);
+  if (valid.length === 0) {
+    return {
+      error:
+        skipped.length > 0
+          ? "No valid marker results to save. Check marker names and numeric values."
+          : null,
+    };
+  }
+
   const supabase = tryCreateClient()!;
   const { data: report, error: reportError } = await supabase
     .from("bloodwork_reports")
@@ -355,10 +379,10 @@ export async function appendResultsToReport(
   if (reportError) return { error: reportError.message };
   if (!report?.user_id) return { error: "Report not found." };
 
-  const rows = results.map((r) => toBloodworkResultRow(reportId, report.user_id, r));
+  const rows = valid.map((r) => toBloodworkResultRow(reportId, report.user_id, r));
 
   const { error } = await supabase.from("bloodwork_results").insert(rows);
-  if (error) return { error: error.message };
+  if (error) return { error: formatBloodworkInsertError(error.message) };
 
   await supabase.from("bloodwork_reports").update({ status: "complete" }).eq("id", reportId);
   return { error: null };
@@ -430,13 +454,23 @@ export async function updateBloodworkReport(
         .eq("id", result.id)
         .eq("report_id", reportId);
 
-      if (updateError) return { error: updateError.message };
+      if (updateError) return { error: formatBloodworkInsertError(updateError.message) };
     } else {
+      const { valid, skipped } = prepareMarkersForInsert([result]);
+      if (valid.length === 0) {
+        return {
+          error:
+            skipped[0]?.reason === "Duplicate marker"
+              ? "Duplicate marker — this marker is already on the report."
+              : "Could not add marker — name and numeric result are required.",
+        };
+      }
+
       const { error: insertError } = await supabase
         .from("bloodwork_results")
-        .insert(toBloodworkResultRow(reportId, reportOwner.user_id, result));
+        .insert(toBloodworkResultRow(reportId, reportOwner.user_id, valid[0]));
 
-      if (insertError) return { error: insertError.message };
+      if (insertError) return { error: formatBloodworkInsertError(insertError.message) };
     }
   }
 
@@ -540,7 +574,7 @@ export async function extractMarkersFromReport(
     if (!res.ok) {
       return {
         data: null,
-        error: json.error ?? "Extraction failed",
+        error: json.message ?? json.error ?? "Extraction failed",
         setupRequired: false,
       };
     }

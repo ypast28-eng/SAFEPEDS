@@ -24,6 +24,69 @@ Haematocrit 0.48 0.40 - 0.54
 Platelets 252 x10^9/L 150 - 400`;
 
 describe("parseBloodworkPdfText", () => {
+  it("extracts common pathology report markers", () => {
+    const report = `Haematology
+Haemoglobin 145 g/L 130 - 180
+Haematocrit 0.48 0.40 - 0.54
+RBC 4.8 x10^12/L 4.5 - 5.5
+WBC 6.2 x10^9/L 4.0 - 11.0
+Platelets 252 x10^9/L 150 - 400
+Liver Function
+ALT 36 U/L 5 - 40
+AST 34 U/L 10 - 40
+GGT 28 U/L 5 - 50
+Bilirubin 12 umol/L 3 - 20
+Albumin 42 g/L 35 - 50
+Renal Function
+Creatinine 90 umol/L 60 - 110
+eGFR >90 >59
+Androgens
+Testosterone 28.5 nmol/L 9.5 - 35.0
+SHBG 25 nmol/L 10 - 70
+Free Testosterone 710.0 pmol/L 260 - 750
+Hormones
+Estradiol 85 pmol/L <160
+Prolactin 220 mIU/L 45 - 375
+LH 4 U/L 1 - 8
+FSH 3 U/L 1 - 8
+Lipids
+Cholesterol 4.1 mmol/L <5.0
+HDL 1.4 mmol/L >1.0
+LDL 2.2 mmol/L <3.0
+Triglycerides 0.9 mmol/L <2.0`;
+
+    const markers = parseBloodworkPdfText(report);
+    const names = markers.map((m) => m.marker);
+
+    for (const expected of [
+      "Haemoglobin",
+      "Haematocrit",
+      "RBC",
+      "WBC",
+      "Platelets",
+      "ALT",
+      "AST",
+      "GGT",
+      "Bilirubin",
+      "Albumin",
+      "Creatinine",
+      "eGFR",
+      "Testosterone",
+      "SHBG",
+      "Free Testosterone",
+      "Estradiol",
+      "Prolactin",
+      "LH",
+      "FSH",
+      "Cholesterol",
+      "HDL",
+      "LDL",
+      "Triglycerides",
+    ]) {
+      expect(names).toContain(expected);
+    }
+  });
+
   it("extracts every example marker row", () => {
     const markers = parseBloodworkPdfText(EXAMPLE_ROWS);
     expect(markers).toHaveLength(15);
