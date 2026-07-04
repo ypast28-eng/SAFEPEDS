@@ -3,12 +3,12 @@ import { getPdfJsServerModule, getPdfJsVersion } from "@/lib/bloodwork/pdfjs-ser
 import fs from "node:fs";
 
 describe("pdfjs-server", () => {
-  it("loads pdf.js with a resolvable legacy worker path", async () => {
+  it("loads pdf.js with a preloaded Node WorkerMessageHandler", async () => {
     expect(getPdfJsVersion()).toMatch(/^\d+\.\d+\.\d+/);
 
     const pdfjs = await getPdfJsServerModule();
-    expect(pdfjs.GlobalWorkerOptions.workerSrc).toContain("pdfjs-dist/legacy/build/pdf.worker.mjs");
     expect(globalThis.pdfjsWorker?.WorkerMessageHandler).toBeDefined();
+    expect(pdfjs.getDocument).toBeTypeOf("function");
   });
 
   it("opens a PDF without worker setup errors", async () => {
