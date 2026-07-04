@@ -1,4 +1,11 @@
 import { detectMarkerStatus, type ParsedMarkerStatus } from "@/lib/bloodwork/detect-marker-status";
+import {
+  type ApprovedBloodworkCategory,
+  isJunkTableLine,
+  resolveApprovedMarkerName,
+  resolveCategoryHeading,
+  stripUnitsFromMarkerText,
+} from "@/lib/bloodwork/approved-markers";
 
 export interface ParsedBloodworkMarker {
   panel: string;
@@ -14,30 +21,11 @@ export interface ParsedBloodworkMarker {
   status: ParsedMarkerStatus;
 }
 
-const KNOWN_PANELS = [
-  "androgens",
-  "general chemistry",
-  "liver function",
-  "hormones",
-  "lipids",
-  "haematology",
-  "hematology",
-  "renal function",
-  "kidney function",
-  "thyroid",
-  "iron studies",
-  "vitamins",
-  "electrolytes",
-  "proteins",
-  "inflammatory markers",
-  "glucose metabolism",
-];
-
 const UNIT_PATTERN =
-  /\b(x10\^?\d+\/L|x10[⁰¹²³⁴⁵⁶⁷⁸⁹]+\/L|mmol\/L|nmol\/L|pmol\/L|umol\/L|µmol\/L|mol\/L|g\/L|U\/L|IU\/L|mIU\/L|L\/L|%|fL|pg|ng\/mL|ng\/dL|mL\/min\/1\.73m2)\b/i;
+  /\b(x10\^?\d+\/L|x10[⁰¹²³⁴⁵⁶⁷⁸⁹]+\/L|mmol\/L|nmol\/L|pmol\/L|umol\/L|µmol\/L|mol\/L|g\/L|U\/L|IU\/L|mIU\/L|L\/L|mL\/min\/1\.73m2|fL|pg|ng\/mL|ng\/dL|%)\b/i;
 
-const RANGE_BOTH = /(\d+\.?\d*)\s*-\s*(\d+\.?\d*)\s*$/;
-const RANGE_UPPER = /^<\s*(\d+\.?\d*)\s*$/;
+const RANGE_BOTH = /^(\d+\.?\d*)\s*-\s*(\d+\.?\d*)\s*$/;
+const RANGE_UPPER = /^([<>]=?)\s*(\d+\.?\d*)\s*$/;
 const RANGE_LOWER = /^>\s*(\d+\.?\d*)\s*$/;
 
 function normalizeText(text: string): string {
@@ -46,24 +34,6 @@ function normalizeText(text: string): string {
     .replace(/\u00a0/g, " ")
     .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]/g, (d) => String("⁰¹²³⁴⁵⁶⁷⁸⁹".indexOf(d)))
     .replace(/×/g, "x");
-}
-
-function isPanelHeading(line: string): boolean {
-  const trimmed = line.trim();
-  if (!trimmed || trimmed.length > 80) return false;
-  if (/\d/.test(trimmed)) return false;
-
-  const lower = trimmed.toLowerCase();
-  if (KNOWN_PANELS.some((p) => lower === p || lower.includes(p))) return true;
-
-  if (/^[A-Z][A-Z0-9 /&()-]{2,}$/.test(trimmed)) return true;
-
-  const words = trimmed.split(/\s+/);
-  if (words.length <= 5 && /^[A-Za-z][A-Za-z /&()-]+$/.test(trimmed)) {
-    return true;
-  }
-
-  return false;
 }
 
 function parseReferenceRange(raw: string): {
@@ -85,12 +55,14 @@ function parseReferenceRange(raw: string): {
     };
   }
 
-  const upper = ref.match(RANGE_UPPER);
-  if (upper) {
+  const bound = ref.match(RANGE_UPPER);
+  if (bound) {
+    const comparator = bound[1];
+    const value = Number(bound[2]);
     return {
-      reference_range: ref,
-      range_low: null,
-      range_high: Number(upper[1]),
+      reference_range: `${comparator}${bound[2]}`,
+      range_low: comparator.startsWith(">") ? value : null,
+      range_high: comparator.startsWith("<") ? value : null,
     };
   }
 
@@ -106,7 +78,7 @@ function parseReferenceRange(raw: string): {
   return { reference_range: ref, range_low: null, range_high: null };
 }
 
-function extractRangeFromEnd(line: string): {
+function extractReferenceFromEnd(line: string): {
   remainder: string;
   reference_range: string;
   range_low: number | null;
@@ -140,7 +112,7 @@ function extractRangeFromEnd(line: string): {
   };
 }
 
-function extractUnit(line: string): { remainder: string; unit: string } {
+function extractUnitFromEnd(line: string): { remainder: string; unit: string } {
   const match = line.match(new RegExp(`^(.*?)\\s+(${UNIT_PATTERN.source})$`, "i"));
   if (match) {
     return { remainder: match[1].trim(), unit: match[2] };
@@ -148,7 +120,7 @@ function extractUnit(line: string): { remainder: string; unit: string } {
   return { remainder: line.trim(), unit: "" };
 }
 
-function extractFlag(line: string): { remainder: string; flag: "H" | "L" | null } {
+function extractFlagFromEnd(line: string): { remainder: string; flag: "H" | "L" | null } {
   const match = line.match(/^(.+?)\s+([HL])\s*$/i);
   if (match) {
     return { remainder: match[1].trim(), flag: match[2].toUpperCase() as "H" | "L" };
@@ -156,7 +128,7 @@ function extractFlag(line: string): { remainder: string; flag: "H" | "L" | null 
   return { remainder: line.trim(), flag: null };
 }
 
-function extractValue(line: string): {
+function extractResultFromEnd(line: string): {
   marker: string;
   result: string;
   numeric_value: number | null;
@@ -193,21 +165,28 @@ function extractValue(line: string): {
   };
 }
 
-export function parseMarkerRow(line: string, panel: string): ParsedBloodworkMarker | null {
+/**
+ * Parse one pathology table row: [Test Name] [Result] [Units] [Reference Interval]
+ */
+export function parseMarkerRow(
+  line: string,
+  category: ApprovedBloodworkCategory
+): ParsedBloodworkMarker | null {
   const cleaned = line.replace(/\s+/g, " ").trim();
-  if (!cleaned || cleaned.length < 3) return null;
-  if (isPanelHeading(cleaned)) return null;
-  if (/^(page|report|patient|doctor|laboratory|collected|date|name|dob|ref)/i.test(cleaned)) {
+  if (isJunkTableLine(cleaned)) return null;
+  if (cleaned.toLowerCase() === "random") return null;
+
+  const { remainder: afterRef, ...range } = extractReferenceFromEnd(cleaned);
+  const { remainder: afterUnit, unit } = extractUnitFromEnd(afterRef);
+  const { remainder: afterFlag, flag } = extractFlagFromEnd(afterUnit);
+  const valueParts = extractResultFromEnd(afterFlag);
+
+  const markerRaw = stripUnitsFromMarkerText(valueParts.marker);
+  const canonicalMarker = resolveApprovedMarkerName(markerRaw, category);
+
+  if (!canonicalMarker || valueParts.numeric_value == null || !valueParts.result) {
     return null;
   }
-
-  const { remainder: afterRange, ...range } = extractRangeFromEnd(cleaned);
-  const { remainder: afterUnit, unit } = extractUnit(afterRange);
-  const { remainder: afterFlag, flag } = extractFlag(afterUnit);
-  const valueParts = extractValue(afterFlag);
-
-  if (!valueParts.marker || valueParts.numeric_value == null) return null;
-  if (valueParts.marker.length < 2) return null;
 
   const status = detectMarkerStatus({
     numeric_value: valueParts.numeric_value,
@@ -219,13 +198,13 @@ export function parseMarkerRow(line: string, panel: string): ParsedBloodworkMark
   });
 
   return {
-    panel,
-    marker: valueParts.marker,
+    panel: category,
+    marker: canonicalMarker,
     result: valueParts.result,
     numeric_value: valueParts.numeric_value,
     comparator: valueParts.comparator,
     flag,
-    unit,
+    unit: unit.trim(),
     reference_range: range.reference_range,
     range_low: range.range_low,
     range_high: range.range_high,
@@ -240,20 +219,23 @@ export function parseBloodworkPdfText(text: string): ParsedBloodworkMarker[] {
     .map((line) => line.replace(/\s+/g, " ").trim())
     .filter(Boolean);
 
-  let currentPanel = "General";
+  let currentCategory: ApprovedBloodworkCategory | null = null;
   const markers: ParsedBloodworkMarker[] = [];
   const seen = new Set<string>();
 
   for (const line of lines) {
-    if (isPanelHeading(line)) {
-      currentPanel = line.trim();
+    const heading = resolveCategoryHeading(line);
+    if (heading) {
+      currentCategory = heading;
       continue;
     }
 
-    const parsed = parseMarkerRow(line, currentPanel);
+    if (!currentCategory) continue;
+
+    const parsed = parseMarkerRow(line, currentCategory);
     if (!parsed) continue;
 
-    const key = `${parsed.panel}::${parsed.marker}::${parsed.result}`;
+    const key = `${parsed.panel}::${parsed.marker}`;
     if (seen.has(key)) continue;
     seen.add(key);
     markers.push(parsed);

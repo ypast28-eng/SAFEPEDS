@@ -9,16 +9,18 @@ import {
   FileText,
   Calendar,
   Building2,
-  Heart,
   Sparkles,
   Loader2,
   AlertCircle,
   Pencil,
 } from "lucide-react";
 import { Button, Card, Badge } from "@/components/ui";
-import { Table } from "@/components/ui/Table";
 import { ManualEntryForm } from "./ManualEntryForm";
 import { BloodworkExtractionPreview } from "./BloodworkExtractionPreview";
+import {
+  BloodworkResultsGroupedTable,
+  bloodworkResultToDisplayRow,
+} from "./BloodworkResultsGroupedTable";
 import { ReportEditForm } from "./ReportEditForm";
 import {
   extractMarkersFromReport,
@@ -26,11 +28,10 @@ import {
   getSignedFileUrl,
   fetchReportsWithStats,
 } from "@/services/bloodwork";
-import { StatusBadge } from "./StatusBadge";
 import { AiBloodworkReportCard } from "@/components/ai";
 import { useProfile } from "@/hooks/useProfile";
 import { profileToAiContext, reportToAiContext } from "@/lib/ai/transform";
-import { formatLabDate, formatRefRange } from "@/utils/bloodwork";
+import { formatLabDate } from "@/utils/bloodwork";
 import { formatBloodworkPhase, phaseBadgeVariant } from "@/lib/bloodwork/phase";
 import { formatReportStatus, canExtractBloodworkMarkers, getBloodworkResultCount, getReportStoragePath, reportHasUploadedFile } from "@/lib/bloodwork/upload";
 import type { BloodworkReportWithResults, ExtractedBloodworkMarker, StructuredBloodworkMarker } from "@/types/bloodwork";
@@ -166,16 +167,28 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
   const markerCount = getBloodworkResultCount(report);
   const canExtract = canExtractBloodworkMarkers(report);
 
-  const tableData = (Array.isArray(report.bloodwork_results) ? report.bloodwork_results : []).map((r) => ({
-    id: r.id,
-    marker: r.marker_name,
-    category: r.category,
-    result: r.result_text ?? `${r.result_value}`,
-    unit: r.unit,
-    reference: r.reference_range ?? formatRefRange(r.reference_low, r.reference_high, r.unit),
-    status: r.status,
-    date: formatLabDate(report.collection_date),
-  }));
+  const resultRows = (Array.isArray(report.bloodwork_results) ? report.bloodwork_results : [])
+    .map((r) =>
+      bloodworkResultToDisplayRow({
+        id: r.id,
+        category: r.category,
+        panel: r.panel,
+        marker_name: r.marker_name,
+        marker: r.marker,
+        result_value: r.result_value,
+        numeric_value: r.numeric_value,
+        result: r.result,
+        result_text: r.result_text,
+        unit: r.unit,
+        reference_range: r.reference_range,
+        reference_low: r.reference_low,
+        reference_high: r.reference_high,
+        range_low: r.range_low,
+        range_high: r.range_high,
+        status: r.status,
+      })
+    )
+    .filter((row): row is NonNullable<typeof row> => row != null);
 
   if (showReview && extractedMarkers) {
     return (
@@ -446,7 +459,7 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
 
       <div>
         <h2 className="text-base font-semibold text-foreground mb-4">Results</h2>
-        {tableData.length === 0 ? (
+        {resultRows.length === 0 ? (
           <Card variant="bordered" padding="lg">
             <p className="text-sm text-muted text-center py-8">
               No marker results yet.{" "}
@@ -469,40 +482,7 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
             </p>
           </Card>
         ) : (
-          <Table
-            columns={[
-              {
-                key: "marker",
-                header: "Marker",
-                render: (row) => (
-                  <div className="flex flex-col gap-1">
-                    <span>{row.marker}</span>
-                    {row.status && row.status !== "Normal" && (
-                      <Link
-                        href={`/health-library?marker=${encodeURIComponent(String(row.marker))}`}
-                        className="inline-flex items-center gap-1 text-xs text-secondary hover:underline"
-                      >
-                        <Heart className="h-3 w-3" />
-                        Learn More
-                      </Link>
-                    )}
-                  </div>
-                ),
-              },
-              { key: "category", header: "Category", className: "hidden md:table-cell" },
-              { key: "result", header: "Result" },
-              { key: "unit", header: "Unit", className: "hidden sm:table-cell" },
-              { key: "reference", header: "Reference Range" },
-              {
-                key: "status",
-                header: "Status",
-                render: (row) => <StatusBadge status={row.status as "Low" | "Normal" | "High" | null} />,
-              },
-              { key: "date", header: "Collection Date", className: "hidden lg:table-cell" },
-            ]}
-            data={tableData}
-            keyField="id"
-          />
+          <BloodworkResultsGroupedTable rows={resultRows} />
         )}
       </div>
 
