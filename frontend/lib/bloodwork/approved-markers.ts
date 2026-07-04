@@ -9,6 +9,16 @@ export const APPROVED_BLOODWORK_CATEGORIES = [
   "Haematology",
 ] as const;
 
+/** UI display order for grouped bloodwork results. */
+export const BLOODWORK_DISPLAY_CATEGORY_ORDER = [
+  "Androgens",
+  "Hormones",
+  "General Chemistry",
+  "Liver Function",
+  "Lipids",
+  "Haematology",
+] as const;
+
 export type ApprovedBloodworkCategory = (typeof APPROVED_BLOODWORK_CATEGORIES)[number];
 
 export const APPROVED_MARKERS_BY_CATEGORY: Record<
