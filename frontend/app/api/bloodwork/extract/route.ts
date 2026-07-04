@@ -8,7 +8,7 @@ import {
 import { formatBloodworkInsertError } from "@/lib/bloodwork/db-errors";
 import { runStrictExtractionPipeline } from "@/lib/bloodwork/extraction-pipeline";
 import { buildExtractionSnapshot } from "@/lib/bloodwork/parsed-to-result";
-import { extractSectionTables, parseBloodworkPdfText } from "@/lib/bloodwork/parseBloodworkPdf";
+import { parseBloodworkPdfTextWithMeta } from "@/lib/bloodwork/parseBloodworkPdf";
 import { prepareMarkersForInsert } from "@/lib/bloodwork/validate-markers";
 import { toBloodworkResultRows } from "@/lib/bloodwork/result-row";
 import { getReportStoragePath } from "@/lib/bloodwork/upload";
@@ -149,7 +149,7 @@ export async function POST(request: Request) {
 
     let parser: "pdf" | "openai" = "openai";
     let structuredSnapshot: ReturnType<typeof buildExtractionSnapshot> = [];
-    let extractedMarkers: ReturnType<typeof parseBloodworkPdfText> = [];
+    let extractedMarkers: ReturnType<typeof parseBloodworkPdfTextWithMeta>["finalMarkers"] = [];
     let mappedMarkers: unknown[] = [];
     let validatedMarkers: ReturnType<typeof prepareMarkersForInsert>["validated"] = [];
     let skippedMarkers: ReturnType<typeof prepareMarkersForInsert>["skipped"] = [];
@@ -160,13 +160,10 @@ export async function POST(request: Request) {
       const pdfParse = (await import("pdf-parse")).default;
       const parsedPdf = await pdfParse(buffer);
       rawText = parsedPdf.text ?? "";
-      const extractedTables = extractSectionTables(rawText);
-      extractedMarkers = parseBloodworkPdfText(rawText);
+      const parsed = parseBloodworkPdfTextWithMeta(rawText);
+      extractedMarkers = parsed.finalMarkers;
       structuredSnapshot = buildExtractionSnapshot(extractedMarkers);
       parser = "pdf";
-
-      console.log("RAW PDF TEXT:", rawText);
-      console.log("RAW EXTRACTED TABLES:", extractedTables);
 
       const pipeline = runStrictExtractionPipeline(extractedMarkers);
       mappedMarkers = pipeline.mappedMarkers;
@@ -201,9 +198,7 @@ export async function POST(request: Request) {
       validMarkers = prepared.valid;
     }
 
-    console.log("Mapped markers before insert:", mappedMarkers);
-    console.log("Valid markers to insert:", validMarkers);
-    console.log("Skipped markers:", skippedMarkers);
+    console.log("SKIPPED MARKERS:", skippedMarkers);
 
     const warnings: string[] = [];
     if (skippedMarkers.length > 0) {

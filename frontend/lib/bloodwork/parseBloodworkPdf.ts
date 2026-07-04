@@ -9,6 +9,12 @@ import {
   stripUnitsFromMarkerText,
   toDisplayMarkerName,
 } from "@/lib/bloodwork/approved-markers";
+import {
+  EXPECTED_CLINIPATH_MARKER_COUNT,
+  extractClinipathFallbackMarkers,
+  getMissingClinipathMarkerNames,
+  mergeStructuredAndFallbackMarkers,
+} from "@/lib/bloodwork/clinipath-fallback-parser";
 
 export interface ParsedBloodworkMarker {
   panel: string;
@@ -379,13 +385,9 @@ function dedupeMarkers(markers: ParsedBloodworkMarker[]): ParsedBloodworkMarker[
   return deduped;
 }
 
-export function parseBloodworkPdfText(text: string): ParsedBloodworkMarker[] {
+export function parseStructuredMarkers(text: string): ParsedBloodworkMarker[] {
   const rawText = normalizeText(text);
-  console.log("RAW PDF TEXT:", rawText);
-
   const extractedTables = extractSectionTables(rawText);
-  console.log("RAW EXTRACTED TABLES:", extractedTables);
-
   const markers: ParsedBloodworkMarker[] = [];
 
   for (const table of extractedTables) {
@@ -395,16 +397,47 @@ export function parseBloodworkPdfText(text: string): ParsedBloodworkMarker[] {
     }
   }
 
-  if (markers.length === 0) {
-    for (const table of extractedTables) {
-      for (const line of table.lines) {
-        const fallback = parseMarkerRowFallback(line, table.category);
-        if (fallback) markers.push(fallback);
-      }
-    }
+  return dedupeMarkers(markers);
+}
+
+export interface BloodworkPdfParseResult {
+  rawText: string;
+  structuredMarkers: ParsedBloodworkMarker[];
+  fallbackMarkers: ParsedBloodworkMarker[];
+  finalMarkers: ParsedBloodworkMarker[];
+}
+
+export function parseBloodworkPdfTextWithMeta(text: string): BloodworkPdfParseResult {
+  const rawText = normalizeText(text);
+  console.log("RAW PDF TEXT:", rawText);
+
+  const structuredMarkers = parseStructuredMarkers(rawText);
+  console.log("STRUCTURED EXTRACTED MARKERS:", structuredMarkers);
+
+  const fallbackMarkers = extractClinipathFallbackMarkers(rawText);
+  console.log("FALLBACK EXTRACTED MARKERS:", fallbackMarkers);
+
+  const finalMarkers = mergeStructuredAndFallbackMarkers(structuredMarkers, fallbackMarkers);
+  console.log("FINAL MARKERS TO INSERT:", finalMarkers);
+
+  if (finalMarkers.length < EXPECTED_CLINIPATH_MARKER_COUNT) {
+    const missing = getMissingClinipathMarkerNames(finalMarkers);
+    console.warn(
+      `[bloodwork/pdf] Expected ${EXPECTED_CLINIPATH_MARKER_COUNT} markers but found ${finalMarkers.length}. Missing:`,
+      missing
+    );
   }
 
-  return dedupeMarkers(markers);
+  return {
+    rawText,
+    structuredMarkers,
+    fallbackMarkers,
+    finalMarkers,
+  };
+}
+
+export function parseBloodworkPdfText(text: string): ParsedBloodworkMarker[] {
+  return parseBloodworkPdfTextWithMeta(text).finalMarkers;
 }
 
 export async function parseBloodworkPdfBuffer(buffer: Buffer): Promise<ParsedBloodworkMarker[]> {

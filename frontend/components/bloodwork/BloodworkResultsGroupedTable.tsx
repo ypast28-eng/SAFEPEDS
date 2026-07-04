@@ -2,7 +2,7 @@
 
 import { StatusBadge } from "./StatusBadge";
 import {
-  APPROVED_BLOODWORK_CATEGORIES,
+  BLOODWORK_DISPLAY_CATEGORY_ORDER,
   isApprovedBloodworkMarker,
 } from "@/lib/bloodwork/approved-markers";
 import { cn } from "@/utils/cn";
@@ -23,7 +23,7 @@ function filterApprovedRows(rows: BloodworkResultRow[]): BloodworkResultRow[] {
 
 function groupByCategory(rows: BloodworkResultRow[]): Map<string, BloodworkResultRow[]> {
   const grouped = new Map<string, BloodworkResultRow[]>();
-  for (const category of APPROVED_BLOODWORK_CATEGORIES) {
+  for (const category of BLOODWORK_DISPLAY_CATEGORY_ORDER) {
     const items = rows.filter((row) => row.category === category);
     if (items.length > 0) grouped.set(category, items);
   }
