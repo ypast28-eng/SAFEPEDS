@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { BLOODWORK_REPORTS_CHANGED_EVENT } from "@/lib/bloodwork/report-events";
 import { deleteReport, fetchReportsWithStats } from "@/services/bloodwork";
 import type { BloodworkDashboardStats } from "@/types/bloodwork";
 
@@ -29,7 +30,16 @@ export function useBloodworkDashboard() {
   }, []);
 
   useEffect(() => {
-    refresh();
+    void refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    const onReportsChanged = () => {
+      void refresh();
+    };
+
+    window.addEventListener(BLOODWORK_REPORTS_CHANGED_EVENT, onReportsChanged);
+    return () => window.removeEventListener(BLOODWORK_REPORTS_CHANGED_EVENT, onReportsChanged);
   }, [refresh]);
 
   const remove = useCallback(

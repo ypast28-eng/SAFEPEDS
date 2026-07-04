@@ -1,5 +1,6 @@
 import { calculateStatus } from "@/lib/bloodwork/status";
 import { resolveBloodworkPhase } from "@/lib/bloodwork/phase";
+import { sortBloodworkReportsByRecency } from "@/lib/bloodwork/report-sort";
 import { formatBloodworkInsertError } from "@/lib/bloodwork/db-errors";
 import { normalizeBloodworkResults } from "@/lib/bloodwork/normalize-result";
 import { bloodworkResultToDbFields, toBloodworkResultRow } from "@/lib/bloodwork/result-row";
@@ -91,14 +92,15 @@ function reportInsertPayload(userId: string, input: Omit<CreateReportInput, "res
 }
 
 function buildDashboardStats(enriched: BloodworkReportWithResults[]): BloodworkDashboardStats {
-  const latestReport = enriched[0] ?? null;
-  const latestCruiseReport = enriched.find((r) => r.phase === "cruise") ?? null;
-  const latestBlastReport = enriched.find((r) => r.phase === "blast") ?? null;
+  const sorted = sortBloodworkReportsByRecency(enriched);
+  const latestReport = sorted[0] ?? null;
+  const latestCruiseReport = sorted.find((r) => r.phase === "cruise") ?? null;
+  const latestBlastReport = sorted.find((r) => r.phase === "blast") ?? null;
 
   return {
-    totalReports: enriched.length,
+    totalReports: sorted.length,
     latestReport,
-    previousReports: enriched.slice(1),
+    previousReports: sorted.slice(1),
     totalOutOfRange: latestReport?.out_of_range_count ?? 0,
     latestCruiseReport,
     latestBlastReport,
@@ -137,7 +139,8 @@ export async function fetchReportsWithStats(): Promise<{
   const { data: reports, error } = await supabase
     .from("bloodwork_reports")
     .select(`*, bloodwork_results (*)`)
-    .order("collection_date", { ascending: false });
+    .order("collection_date", { ascending: false })
+    .order("created_at", { ascending: false });
 
   if (error) {
     return {
@@ -154,16 +157,18 @@ export async function fetchReportsWithStats(): Promise<{
     };
   }
 
-  const enriched: BloodworkReportWithResults[] = (reports ?? []).map((r) => {
-    const row = r as Record<string, unknown> & {
-      bloodwork_results?: Record<string, unknown>[];
-    };
-    const results = normalizeBloodworkResults(row.bloodwork_results);
-    const out_of_range_count = results.filter(
-      (res) => res.status === "Low" || res.status === "High"
-    ).length;
-    return { ...row, bloodwork_results: results, out_of_range_count } as BloodworkReportWithResults;
-  }).map((row) => normalizeReport(row));
+  const enriched: BloodworkReportWithResults[] = sortBloodworkReportsByRecency(
+    (reports ?? []).map((r) => {
+      const row = r as Record<string, unknown> & {
+        bloodwork_results?: Record<string, unknown>[];
+      };
+      const results = normalizeBloodworkResults(row.bloodwork_results);
+      const out_of_range_count = results.filter(
+        (res) => res.status === "Low" || res.status === "High"
+      ).length;
+      return { ...row, bloodwork_results: results, out_of_range_count } as BloodworkReportWithResults;
+    }).map((row) => normalizeReport(row))
+  );
 
   return {
     data: buildDashboardStats(enriched),
