@@ -143,6 +143,10 @@ export function ReportDetailView({ reportId }: ReportDetailViewProps) {
       );
       setShowReview(true);
       setReport((prev) => (prev ? { ...prev, status: "pending_review" } : prev));
+    } catch (err) {
+      setExtractError(
+        err instanceof Error ? err.message : "Extraction failed. Try again or add markers manually."
+      );
     } finally {
       setIsExtracting(false);
     }

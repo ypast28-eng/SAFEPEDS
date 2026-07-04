@@ -3,10 +3,16 @@
  * for scanned or rasterized pages that expose little or no selectable text.
  */
 
+import os from "node:os";
+import path from "node:path";
 import { createCanvas } from "@napi-rs/canvas";
+import { withTimeout } from "@/lib/bloodwork/extraction-timeout";
 import { getPdfJsServerModule } from "@/lib/bloodwork/pdfjs-server";
 
 export const OCR_CHAR_THRESHOLD = 100;
+const OCR_WORKER_TIMEOUT_MS = 20_000;
+const OCR_PAGE_TIMEOUT_MS = 25_000;
+const TESSERACT_CACHE_PATH = path.join(os.tmpdir(), "safepeds-tesseract-cache");
 
 export type PdfTextExtractionMethod = "pdf.js-text-layer" | "hybrid-pdf.js-ocr";
 
@@ -102,12 +108,31 @@ async function createOcrRecognizer(): Promise<{
   recognize: OcrRecognizer;
   terminate: () => Promise<unknown>;
 }> {
+  console.log("[pdf-ocr] Creating Tesseract worker...");
   const { createWorker } = await import("tesseract.js");
-  const worker = await createWorker("eng");
+
+  const worker = await withTimeout(
+    () =>
+      createWorker("eng", 1, {
+        cachePath: TESSERACT_CACHE_PATH,
+        logger: (message) => {
+          console.log(`[pdf-ocr] ${message.status}`, {
+            progress: message.progress,
+          });
+        },
+      }),
+    OCR_WORKER_TIMEOUT_MS,
+    "Tesseract worker startup"
+  );
+  console.log("[pdf-ocr] Tesseract worker ready");
 
   return {
     recognize: async (imageBuffer: Buffer) => {
-      const { data } = await worker.recognize(imageBuffer);
+      const { data } = await withTimeout(
+        () => worker.recognize(imageBuffer),
+        OCR_PAGE_TIMEOUT_MS,
+        "Tesseract page OCR"
+      );
       return data.text ?? "";
     },
     terminate: () => worker.terminate(),
@@ -147,47 +172,90 @@ export async function extractPdfTextByPage(
   options?: { ocrRecognizer?: OcrRecognizer }
 ): Promise<PdfTextExtractionResult> {
   try {
+    console.log("[pdf-extract] Loading pdf.js...");
     const pdfjs = await getPdfJsServerModule();
+    console.log("[pdf-extract] Opening PDF document...");
     const pdf = await pdfjs.getDocument({
       data: new Uint8Array(buffer),
       useSystemFonts: true,
       disableFontFace: true,
       isEvalSupported: false,
     }).promise;
+    console.log("[pdf-extract] PDF opened", { pageCount: pdf.numPages });
 
     const pages: PdfPageText[] = [];
     let documentOcrUsed = false;
 
-    const ocr =
-      options?.ocrRecognizer != null
-        ? {
-            recognize: options.ocrRecognizer,
-            terminate: async () => {},
-          }
-        : await createOcrRecognizer();
+    let ocr:
+      | {
+          recognize: OcrRecognizer;
+          terminate: () => Promise<unknown>;
+        }
+      | null = null;
+
+    if (options?.ocrRecognizer != null) {
+      ocr = {
+        recognize: options.ocrRecognizer,
+        terminate: async () => {},
+      };
+    }
 
     try {
       for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+        console.log(`[pdf-extract] Processing page ${pageNumber}/${pdf.numPages}...`);
         const page = (await pdf.getPage(pageNumber)) as unknown as PdfRenderPage;
         const pdfJsText = await extractTextLayerFromPage(page);
         const needsOcr = shouldRunOcrForPage(pdfJsText.length);
+        console.log(`[pdf-extract] Page ${pageNumber} pdf.js chars=${pdfJsText.length}`, {
+          needsOcr,
+        });
 
         let ocrText = "";
         if (needsOcr) {
           documentOcrUsed = true;
-          const imageBuffer = await renderPageToImageBuffer(page);
-          ocrText = await ocr.recognize(imageBuffer);
+          if (!ocr) {
+            try {
+              ocr = await createOcrRecognizer();
+            } catch (ocrStartupError) {
+              console.error("[pdf-ocr] Worker startup failed; continuing without OCR", ocrStartupError);
+              ocr = {
+                recognize: async () => "",
+                terminate: async () => {},
+              };
+            }
+          }
+
+          try {
+            console.log(`[pdf-ocr] Rendering page ${pageNumber} for OCR...`);
+            const imageBuffer = await renderPageToImageBuffer(page);
+            console.log(`[pdf-ocr] Running OCR on page ${pageNumber}...`);
+            ocrText = await ocr.recognize(imageBuffer);
+            console.log(`[pdf-ocr] Page ${pageNumber} OCR chars=${ocrText.length}`);
+          } catch (ocrPageError) {
+            console.error(`[pdf-ocr] Page ${pageNumber} OCR failed; using pdf.js text only`, ocrPageError);
+            ocrText = "";
+          }
         }
 
-        const pageText = buildPageText(pageNumber, pdfJsText, ocrText, needsOcr);
+        const pageText = buildPageText(pageNumber, pdfJsText, ocrText, needsOcr && ocrText.length > 0);
         pages.push(pageText);
         logHybridPageStats(pageText);
       }
     } finally {
-      await ocr.terminate();
+      if (ocr) {
+        console.log("[pdf-ocr] Terminating Tesseract worker...");
+        await ocr.terminate();
+      }
+      console.log("[pdf-extract] Destroying PDF document...");
+      await pdf.destroy();
     }
 
     const combinedText = pages.map((page) => page.text).join("\n");
+    console.log("[pdf-extract] PDF text extraction complete", {
+      pageCount: pdf.numPages,
+      ocrUsed: documentOcrUsed,
+      combinedChars: combinedText.length,
+    });
 
     return {
       method: documentOcrUsed ? "hybrid-pdf.js-ocr" : "pdf.js-text-layer",

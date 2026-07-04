@@ -538,18 +538,27 @@ export type ExtractMarkersOutcome =
   | { data: null; error: string; setupRequired: false }
   | { data: null; error: null; setupRequired: true; setupMessage: string };
 
+const EXTRACTION_FETCH_TIMEOUT_MS = 65_000;
+
 /** Call server API to extract markers from an uploaded report file (OpenAI vision/OCR). */
 export async function extractMarkersFromReport(
   reportId: string
 ): Promise<ExtractMarkersOutcome> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), EXTRACTION_FETCH_TIMEOUT_MS);
+
   try {
+    console.log("[bloodwork/client] Requesting extraction...");
     const res = await fetch("/api/bloodwork/extract", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reportId }),
+      signal: controller.signal,
     });
+    console.log("[bloodwork/client] Extraction response received", { status: res.status });
 
     const json = (await res.json()) as {
+      success?: boolean;
       code?: string;
       message?: string;
       error?: string;
@@ -568,6 +577,16 @@ export async function extractMarkersFromReport(
         error: null,
         setupRequired: true,
         setupMessage: json.message ?? "OPENAI_API_KEY is not configured.",
+      };
+    }
+
+    if (res.status === 504 || json.code === "extraction_timeout") {
+      return {
+        data: null,
+        error:
+          json.error ??
+          "Extraction timed out after 60 seconds. Try again or enter markers manually.",
+        setupRequired: false,
       };
     }
 
@@ -592,12 +611,23 @@ export async function extractMarkersFromReport(
       error: null,
       setupRequired: false,
     };
-  } catch {
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      return {
+        data: null,
+        error:
+          "Extraction timed out after 65 seconds. The server may still be processing OCR. Try again or enter markers manually.",
+        setupRequired: false,
+      };
+    }
+
     return {
       data: null,
       error: "Could not reach extraction service. Check your connection and try again.",
       setupRequired: false,
     };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
