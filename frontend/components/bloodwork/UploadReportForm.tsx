@@ -132,6 +132,8 @@ export function UploadReportForm({
       setExtractionWarnings(outcome.data.warnings);
       setUploadedReport((prev) => (prev ? { ...prev, status: "complete" } : prev));
       setStep("preview");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Extraction failed. Try again or enter markers manually.");
     } finally {
       setIsExtracting(false);
     }

@@ -186,9 +186,17 @@ function diagnoseMarker(
 }
 
 export async function runPdfExtractionTrace(buffer: Buffer): Promise<ExtractionTraceResult> {
+  console.log("[extraction-trace] Extracting PDF text by page...");
   const pdfExtraction = await extractPdfTextByPage(buffer);
+  console.log("[extraction-trace] PDF text extraction finished", {
+    pageCount: pdfExtraction.pageCount,
+    ocrUsed: pdfExtraction.ocrUsed,
+  });
+
   const combinedText = pdfExtraction.combinedText;
+  console.log("[extraction-trace] Running Clinipath parser...");
   const parseResult = parseBloodworkPdfTextWithMeta(combinedText);
+  console.log("[extraction-trace] Markers extracted:", parseResult.finalMarkers.length);
   const categoryBlocks = splitClinipathCategoryBlocks(combinedText);
 
   const pageSummaries: PageMarkerSummary[] = pdfExtraction.pages.map((page) => {
@@ -271,8 +279,10 @@ export async function traceAndParsePdf(buffer: Buffer): Promise<{
   trace: ExtractionTraceResult;
   parseResult: BloodworkPdfParseResult;
 }> {
+  console.log("[extraction-trace] Starting traceAndParsePdf...");
   const trace = await runPdfExtractionTrace(buffer);
   logExtractionTrace(trace);
+  console.log("[extraction-trace] traceAndParsePdf complete");
   return { trace, parseResult: trace.parseResult };
 }
 
