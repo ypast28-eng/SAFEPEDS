@@ -13,10 +13,25 @@ interface RiskGaugeProps {
 }
 
 const SIZES = {
-  sm: { dim: 96, stroke: 8, fontSize: "text-xl" },
+  sm: { dim: 72, stroke: 6, fontSize: "text-base" },
   md: { dim: 140, stroke: 10, fontSize: "text-3xl" },
   lg: { dim: 180, stroke: 12, fontSize: "text-4xl" },
 };
+
+function strokeColorForLevel(level: RiskLevel): string {
+  switch (level) {
+    case "Very High":
+      return "#ef4444";
+    case "High":
+      return "#f97316";
+    case "Moderate":
+      return "#f59e0b";
+    case "Low":
+    case "Very Low":
+    default:
+      return "#22c55e";
+  }
+}
 
 export function RiskGauge({ score, level, size = "md", label, className }: RiskGaugeProps) {
   const { dim, stroke, fontSize } = SIZES[size];
@@ -24,19 +39,11 @@ export function RiskGauge({ score, level, size = "md", label, className }: RiskG
   const circumference = 2 * Math.PI * radius;
   const clamped = Math.max(0, Math.min(100, score));
   const offset = circumference - (clamped / 100) * circumference;
-
-  const strokeColor =
-    level === "Very High" || level === "High"
-      ? "#ef4444"
-      : level === "Moderate"
-        ? "#d4a853"
-        : level === "Low"
-          ? "#14b8a6"
-          : "#22c55e";
+  const strokeColor = strokeColorForLevel(level);
 
   return (
     <div className={cn("flex flex-col items-center", className)}>
-      <div className="relative" style={{ width: dim, height: dim }}>
+      <div className="relative shrink-0" style={{ width: dim, height: dim }}>
         <svg width={dim} height={dim} className="-rotate-90">
           <circle
             cx={dim / 2}
@@ -62,7 +69,11 @@ export function RiskGauge({ score, level, size = "md", label, className }: RiskG
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className={cn("font-bold text-foreground", fontSize)}>{Math.round(clamped)}</span>
-          <span className={cn("text-xs font-medium mt-0.5", RISK_LEVEL_COLORS[level])}>{level}</span>
+          {size !== "sm" && (
+            <span className={cn("text-xs font-medium mt-0.5", RISK_LEVEL_COLORS[level])}>
+              {level}
+            </span>
+          )}
         </div>
       </div>
       {label && <p className="text-sm text-muted mt-3 text-center">{label}</p>}

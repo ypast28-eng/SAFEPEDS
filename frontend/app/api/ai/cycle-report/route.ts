@@ -6,7 +6,6 @@ import {
   OPENAI_AI_SETUP_INSTRUCTIONS,
 } from "@/lib/ai/openai-config";
 import { calculateRiskAssessment } from "@/lib/risk/engine";
-import { fetchEnabledRiskRules } from "@/lib/risk/rules-repository";
 import {
   bloodworkToRiskInput,
   cycleToRiskInput,
@@ -86,7 +85,6 @@ async function buildRequestFromCycleId(
 
   if (!cycle) return null;
 
-  const rules = await fetchEnabledRiskRules();
   const assessment = calculateRiskAssessment(
     {
       user_profile: profileToRiskInput((profileResult.data as Profile | null) ?? null),
@@ -94,7 +92,6 @@ async function buildRequestFromCycleId(
       bloodwork: bloodworkToRiskInput(latestReport),
       goal: cycle.goal,
     },
-    rules
   );
 
   return {

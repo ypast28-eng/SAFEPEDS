@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { calculateRiskAssessment } from "@/lib/risk/engine";
-import { fetchEnabledRiskRules, saveRiskAssessment } from "@/lib/risk/rules-repository";
+import { saveRiskAssessment } from "@/lib/risk/rules-repository";
 import type { RiskEngineInput } from "@/types/risk";
 
 export const runtime = "nodejs";
@@ -32,8 +32,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const rules = await fetchEnabledRiskRules();
-    const result = calculateRiskAssessment(body.input, rules);
+    const result = calculateRiskAssessment(body.input);
 
     if (body.save !== false) {
       await saveRiskAssessment(
@@ -48,7 +47,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ...result,
-      rules_source: rules.length > 3 ? "supabase" : "fallback",
+      rules_source: "rule-engine",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Risk calculation failed";

@@ -76,10 +76,28 @@ export interface CategoryRiskOutput {
   triggered_rules: TriggeredRuleOutput[];
 }
 
+export interface CompoundRiskOutput {
+  compound_id: string;
+  compound_name: string;
+  weekly_dose: number;
+  unit: string;
+  frequency_per_week: number;
+  duration_weeks: number;
+  score: number;
+  level: RiskLevel;
+  reasons: string[];
+  risk_tags: string[];
+  monitoring_markers: string[];
+}
+
 export interface RiskAssessmentResult {
   overall_score: number;
   overall_level: RiskLevel;
   categories: CategoryRiskOutput[];
+  compound_risks?: CompoundRiskOutput[];
+  synergy_reasons?: string[];
+  total_anabolic_mg_per_week?: number;
+  duration_weeks?: number;
   summary: string;
   monitoring_recommendations: string[];
   triggered_rules_count: number;
@@ -140,17 +158,17 @@ export interface RiskHistoryEntry {
 }
 
 export const RISK_LEVEL_COLORS: Record<RiskLevel, string> = {
-  "Very Low": "text-green-400",
-  Low: "text-primary",
-  Moderate: "text-secondary",
-  High: "text-amber-400",
-  "Very High": "text-accent",
+  "Very Low": "text-green-500",
+  Low: "text-green-500",
+  Moderate: "text-amber-500",
+  High: "text-orange-500",
+  "Very High": "text-red-500",
 };
 
 export const RISK_LEVEL_BG: Record<RiskLevel, string> = {
   "Very Low": "bg-green-500/15 border-green-500/30",
-  Low: "bg-primary/15 border-primary/30",
-  Moderate: "bg-secondary/15 border-secondary/30",
-  High: "bg-amber-500/15 border-amber-500/30",
-  "Very High": "bg-accent/15 border-accent/30",
+  Low: "bg-green-500/15 border-green-500/30",
+  Moderate: "bg-amber-500/15 border-amber-500/30",
+  High: "bg-orange-500/15 border-orange-500/30",
+  "Very High": "bg-red-500/15 border-red-500/30",
 };

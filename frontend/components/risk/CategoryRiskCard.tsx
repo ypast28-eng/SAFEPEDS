@@ -58,11 +58,13 @@ export function CategoryRiskCard({ category, index = 0 }: CategoryRiskCardProps)
               style={{
                 width: `${category.score}%`,
                 background:
-                  level === "Very High" || level === "High"
+                  level === "Very High"
                     ? "#ef4444"
-                    : level === "Moderate"
-                      ? "#d4a853"
-                      : "#14b8a6",
+                    : level === "High"
+                      ? "#f97316"
+                      : level === "Moderate"
+                        ? "#f59e0b"
+                        : "#22c55e",
               }}
             />
           </div>

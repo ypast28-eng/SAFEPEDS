@@ -28,7 +28,6 @@ import {
   profileToRiskInput,
 } from "@/lib/risk/transform";
 import {
-  buildCompoundRiskHighlights,
   pickDefaultCycleId,
 } from "@/lib/risk/compound-insights";
 import {
@@ -233,6 +232,7 @@ export function RiskDashboardView() {
               <RiskGauge score={assessment.overall_score} level={assessment.overall_level} size="lg" />
               <div className="flex flex-wrap gap-2 mt-4 justify-center">
                 <Badge variant="default">{assessment.triggered_rules_count} rules triggered</Badge>
+                {rulesSource === "rule-engine" && <Badge variant="primary">Rule-based engine</Badge>}
                 {rulesSource === "supabase" && <Badge variant="primary">Supabase rules</Badge>}
                 {rulesSource === "fallback" && <Badge variant="secondary">Fallback rules</Badge>}
               </div>
@@ -272,10 +272,22 @@ export function RiskDashboardView() {
 
           <div>
             <h2 className="text-base font-semibold text-foreground mb-4">Compound-Level Risks</h2>
-            <CompoundRiskList
-              compounds={buildCompoundRiskHighlights(cycleToRiskInput(cycleDetail).compounds)}
-            />
+            <CompoundRiskList compounds={assessment.compound_risks ?? []} />
           </div>
+
+          {assessment.synergy_reasons && assessment.synergy_reasons.length > 0 && (
+            <Card variant="bordered" padding="md">
+              <h3 className="text-sm font-semibold text-foreground mb-2">Stack Synergy Penalties</h3>
+              <ul className="space-y-1">
+                {assessment.synergy_reasons.map((reason) => (
+                  <li key={reason} className="text-xs text-muted flex items-start gap-2">
+                    <span className="text-orange-500 mt-0.5">•</span>
+                    {reason}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
 
           <div>
             <h2 className="text-base font-semibold text-foreground mb-4">Category Risk Ratings</h2>
