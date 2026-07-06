@@ -1,5 +1,4 @@
 import { calculateRiskAssessment } from "@/lib/risk/engine";
-import { fetchEnabledRiskRules } from "@/lib/risk/rules-repository";
 import {
   bloodworkToRiskInput,
   cycleToRiskInput,
@@ -101,7 +100,6 @@ export async function buildChatContext(
   if (cycleId) {
     cycle = await loadCycleWithCompounds(supabase, cycleId, userId);
     if (cycle && cycle.cycle_compounds.length > 0) {
-      const rules = await fetchEnabledRiskRules();
       const assessment = calculateRiskAssessment(
         {
           user_profile: profileToRiskInput(profile),
@@ -109,7 +107,6 @@ export async function buildChatContext(
           bloodwork: bloodworkToRiskInput(latestReport),
           goal: cycle.goal,
         },
-        rules
       );
       riskAssessment = riskToAiContext(assessment);
     }

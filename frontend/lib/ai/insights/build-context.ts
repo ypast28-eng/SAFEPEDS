@@ -1,5 +1,4 @@
 import { calculateRiskAssessment } from "@/lib/risk/engine";
-import { fetchEnabledRiskRules } from "@/lib/risk/rules-repository";
 import { bloodworkToRiskInput, cycleToRiskInput, profileToRiskInput } from "@/lib/risk/transform";
 import { pickDefaultCycleId } from "@/lib/risk/compound-insights";
 import type { InsightsCycleSummary, InsightsStructuredContext } from "@/types/ai-insights";
@@ -130,7 +129,6 @@ export async function buildInsightsContext(
   let riskAssessment: InsightsStructuredContext["risk_assessment"] = null;
   const activeCycle = cycles.find((c) => c.id === currentCycle?.cycle_id);
   if (activeCycle && activeCycle.cycle_compounds.length > 0) {
-    const rules = await fetchEnabledRiskRules();
     const assessment = calculateRiskAssessment(
       {
         user_profile: profileToRiskInput(profile),
@@ -138,7 +136,6 @@ export async function buildInsightsContext(
         bloodwork: bloodworkToRiskInput(latestReport),
         goal: activeCycle.goal,
       },
-      rules
     );
     riskAssessment = {
       overall_score: assessment.overall_score,
